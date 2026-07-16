@@ -10,6 +10,7 @@ FoxESS Cloud) — sem depender de nenhum acesso de usuário de terceiros.
 [Fontes de dados oficiais](#fontes-de-dados-oficiais) ·
 [Limitações conhecidas](#limitações-conhecidas) ·
 [Design do painel](#design-do-painel) ·
+[Falhas de coleta e fallback seguro](#falhas-de-coleta-e-fallback-seguro) ·
 [Consumo por unidade consumidora](#consumo-por-unidade-consumidora-celesc) ·
 [Estrutura do projeto](#estrutura-do-projeto) ·
 [Pendências](#pendências--próximos-passos)
@@ -84,7 +85,11 @@ testando direto contra a API real, não lendo a doc renderizada).
 - **Rate limit confirmado por teste**: cada interface só pode ser chamada 1x
   a cada 5 minutos (senão retorna `failCode 407
   ACCESS_FREQUENCY_IS_TOO_HIGH`) — por isso `COLLECT_INTERVAL_SECONDS` não
-  pode ser menor que 300. Login não tem essa restrição.
+  pode ser menor que 300. Login não tem essa restrição. Vale só pra
+  `getStationRealKpi`/`getDevRealKpi`, que nunca falharam nesse intervalo em
+  produção — **`getAlarmList` tem um limite próprio, mais restrito** (medido
+  empiricamente em ~592-888s; ver "Falhas de coleta e fallback seguro"), por
+  isso roda numa cadência separada de 900s em vez de todo ciclo de 300s.
 - Não fornece curva de potência histórica — só o valor instantâneo do
   momento da chamada (por isso a curva intradiária Huawei no painel tem
   resolução de 5 min, uma por ciclo de coleta).
@@ -224,6 +229,38 @@ mesmo ciclo (e vice-versa).
   fatura mais recente, qualquer uma das 2 UCs) e **nascer/pôr do sol**
   (Open-Meteo) — todos exibidos no card "Status do dia".
 
+### Falhas de coleta e fallback seguro
+
+Cada inversor é coletado num `try/except` isolado (ver "Status por
+inversor"), mas uma falha pontual na API não pode fazer o painel mentir sobre
+o que já foi gerado. Duas proteções em `collector/main.py`:
+
+- **`_carry_forward_day_kwh`**: geração diária só cresce, então quando a
+  consulta de um inversor falha nesse ciclo, o total "Gerado hoje"
+  (`daily_generation.generated_kwh`) usa o último `day_kwh` bem-sucedido
+  daquele inversor em vez de contar a contribuição dele como zero. Sem
+  sucesso ainda no dia (ex.: primeira tentativa do dia já falha), assume 0 —
+  mesmo comportamento de antes do inversor acordar. Estado em memória, por
+  inversor, resetado por dia.
+- **Alerta de falha constante**: cada ciclo grava um ponto
+  `collector_health` (tag `inverter`, campos `consecutive_failures` e
+  `last_error`) — sucesso zera o contador, falha incrementa. A partir de 2
+  falhas seguidas (`FAILURE_ALERT_THRESHOLD`, ~10 min de falha real, não 1
+  blip isolado) o coletor loga como `ERROR` e o webapp expõe o contador via
+  `/api/inverters`, virando alerta na Central de Alertas (ver tabela abaixo).
+  Isso é gravado mesmo se os dois inversores falharem no mesmo ciclo — é
+  justamente aí que o alerta mais importa.
+
+**Caso real que motivou isso** (2026-07-16): `getAlarmList` da Huawei tem um
+limite de taxa mais restrito que os outros endpoints (ver Fontes de dados
+oficiais), e falhava de forma determinística em 2 a cada 3 ciclos — cada
+falha zerava a contribuição da Huawei no total do dia, fazendo "Gerado hoje"
+cair momentaneamente. A causa raiz foi resolvida desacoplando o polling de
+alarme (roda a cada 900s, isolado — uma falha nele não derruba mais
+`power_kw`/`day_kwh` do ciclo); o fallback acima é a camada de segurança
+que garante que qualquer falha residual, nesse ou em qualquer outro endpoint,
+nunca faz o total regredir.
+
 ### Central de alertas
 
 Accordion no topo do Dashboard (fechado por padrão, com contador de alertas
@@ -237,6 +274,7 @@ abaixo):
 | Alerta | Origem | Severidade |
 |---|---|---|
 | Inversor sem comunicação | `/api/inverters` → `status == "sem_comunicacao"` | crítico |
+| Falha constante ao consultar a API do inversor (≥2x seguidas) | `/api/inverters` → `consecutive_failures`/`last_error` | atenção |
 | Temperatura do inversor acima do limiar | `/api/inverters` → `temperature_c` | atenção |
 | Bandeira amarela/vermelha ativa | `/api/day-status` → `bandeira` | atenção |
 | Geração do dia ≥10% abaixo da média da semana | `/api/summary` (hoje) vs. `/api/history?range=semana` (média) | informativo |
@@ -284,7 +322,7 @@ eixo X, `interaction.mode: "index"`).
 |---|---|
 | `GET /` | Página do dashboard |
 | `GET /api/summary` | KPIs atuais: potência, geração/economia do dia, pico do dia + horário, status |
-| `GET /api/inverters` | Potência/geração/temperatura/status (gerando, online sem geração, sem comunicação) por inversor |
+| `GET /api/inverters` | Potência/geração/temperatura/status (gerando, online sem geração, sem comunicação) por inversor, + `consecutive_failures`/`last_error` da coleta |
 | `GET /api/day-status` | Status do dia: clima, sol, alarme (+ detalhe), geração, bandeira vigente |
 | `GET /api/history?range=semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) |
 | `GET /api/forecast` | Previsão do tempo 5 dias (Open-Meteo, sem API key) |

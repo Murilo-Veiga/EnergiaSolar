@@ -21,6 +21,29 @@ BRAZIL_TZ = timezone(timedelta(hours=-3))
 # resetou" (ver _apply_daily_reset_guard) — por inversor.
 _daily_reset_state: dict[str, dict] = {}
 
+# Último day_kwh bem-sucedido por inversor, pra sustentar o total quando a
+# consulta desse ciclo falha (ver _carry_forward_day_kwh) — e contador de
+# falhas consecutivas, pra alertar quando a API fica ruim de verdade (ver
+# _record_attempt).
+_last_known_day_kwh: dict[str, dict] = {}
+_consecutive_failures: dict[str, int] = {"huawei": 0, "foxess": 0}
+
+# 2 ciclos seguidos = ~10min de falha real na API (não é 1 blip isolado) —
+# a partir daqui vale logar como alerta e o webapp expõe pro dashboard.
+FAILURE_ALERT_THRESHOLD = 2
+
+# getAlarmList tem um limite de taxa próprio, mais restrito que getStationRealKpi/
+# getDevRealKpi: medido empiricamente em produção (2026-07-16), o intervalo real
+# exigido pela Huawei pra esse endpoint especifico fica entre ~592s e ~888s — bem
+# acima dos 300s assumidos em MIN_INTERFACE_INTERVAL_SECONDS, que valem pros outros
+# dois. Consultar alarme a cada ciclo de coleta (300s) gerava ACCESS_FREQUENCY_IS_
+# TOO_HIGH em 2 a cada 3 tentativas, de forma determinística. Status de alarme não
+# precisa de frescor de 5min, então a consulta roda numa cadência própria e mais
+# lenta (com folga sobre os 888s observados), desacoplada da coleta de potência/
+# energia — que nunca apresentou esse problema e continua a cada 300s.
+ALARM_POLL_INTERVAL_SECONDS = 900
+_alarm_cache: dict = {"checked_at": None, "has_alarm": False, "alarm_detail": None}
+
 
 def _apply_daily_reset_guard(inverter: str, power_kw: float, day_kwh: float) -> float:
     """A Huawei/FoxESS cacheiam o total do dia na nuvem deles e só atualizam
@@ -41,6 +64,40 @@ def _apply_daily_reset_guard(inverter: str, power_kw: float, day_kwh: float) -> 
     if power_kw > 0:
         state["started"] = True
     return day_kwh if state["started"] else 0.0
+
+
+def _carry_forward_day_kwh(inverter: str, day_kwh: float | None) -> float:
+    """Geração diária só cresce, então uma falha pontual na consulta da API
+    não pode fazer o total "Gerado hoje" regredir — usamos o último valor
+    bem-sucedido de hoje em vez de tratar a contribuição desse inversor
+    como zero. Sem valor bem-sucedido hoje ainda (ex.: primeira tentativa
+    do dia já falha), assume 0, igual ao comportamento de antes do
+    inversor acordar."""
+    today = datetime.now(BRAZIL_TZ).date()
+    if day_kwh is not None:
+        _last_known_day_kwh[inverter] = {"date": today, "value": day_kwh}
+        return day_kwh
+    cached = _last_known_day_kwh.get(inverter)
+    return cached["value"] if cached and cached["date"] == today else 0.0
+
+
+def _record_attempt(inverter: str, error: str | None) -> int:
+    """Atualiza o contador de falhas consecutivas por inversor e retorna o
+    valor atualizado — sucesso zera, falha incrementa."""
+    _consecutive_failures[inverter] = 0 if error is None else _consecutive_failures[inverter] + 1
+    return _consecutive_failures[inverter]
+
+
+def _health_point(inverter: str, consecutive_failures: int, last_error: str | None) -> Point:
+    point = (
+        Point("collector_health")
+        .tag("plant_id", PLANT_TAG)
+        .tag("inverter", inverter)
+        .field("consecutive_failures", consecutive_failures)
+    )
+    if last_error:
+        point = point.field("last_error", last_error[:200])
+    return point
 
 
 def _fox_history_points(foxess: FoxessClient, sn: str, hours_back: int = 3) -> list[Point]:
@@ -78,17 +135,38 @@ def _extract_alarm_detail(alarms: list[dict]) -> str | None:
     return "Alarme ativo"
 
 
+def _get_alarm_status(huawei: HuaweiClient, station_code: str) -> tuple[bool, str | None]:
+    """Consulta getAlarmList numa cadência própria (ver ALARM_POLL_INTERVAL_SECONDS),
+    bem mais lenta que o ciclo de coleta principal — e nunca deixa uma falha nessa
+    consulta específica derrubar a coleta de potência/energia do ciclo (que não tem
+    relação com esse endpoint). Fora da janela de consulta, ou se a tentativa falhar,
+    retorna o último status conhecido em vez de assumir "sem alarme"."""
+    now = time.monotonic()
+    due = _alarm_cache["checked_at"] is None or (now - _alarm_cache["checked_at"]) >= ALARM_POLL_INTERVAL_SECONDS
+    if not due:
+        return _alarm_cache["has_alarm"], _alarm_cache["alarm_detail"]
+
+    _alarm_cache["checked_at"] = now  # marca a tentativa antes de chamar, pra não martelar de novo no próximo ciclo se falhar
+    try:
+        alarms = huawei.get_alarm_list(station_code)
+        _alarm_cache["has_alarm"] = len(alarms) > 0
+        _alarm_cache["alarm_detail"] = _extract_alarm_detail(alarms)
+    except Exception:
+        log.exception("Falha ao consultar getAlarmList (status de alarme mantido no ultimo valor conhecido)")
+    return _alarm_cache["has_alarm"], _alarm_cache["alarm_detail"]
+
+
 def _collect_huawei(huawei: HuaweiClient, station_code: str, dev_dn: str) -> dict:
     huawei.login()
     station_kpi = huawei.get_station_real_kpi(station_code)[0]["dataItemMap"]
     dev_kpi = huawei.get_dev_real_kpi(dev_dn, HUAWEI_DEV_TYPE_ID)[0]["dataItemMap"]
-    alarms = huawei.get_alarm_list(station_code)
+    has_alarm, alarm_detail = _get_alarm_status(huawei, station_code)
     return {
         "power_kw": dev_kpi.get("active_power") or 0.0,
         "day_kwh": dev_kpi.get("day_cap") or station_kpi.get("day_power") or 0.0,
         "temperature_c": dev_kpi.get("temperature"),
-        "has_alarm": len(alarms) > 0,
-        "alarm_detail": _extract_alarm_detail(alarms),
+        "has_alarm": has_alarm,
+        "alarm_detail": alarm_detail,
     }
 
 
@@ -122,31 +200,52 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
     # recente), sem precisar de um campo dedicado pra isso.
     points = []
     huawei_data = fox_data = None
+    huawei_error = fox_error = None
 
     try:
         huawei_data = _collect_huawei(huawei, station_code, dev_dn)
         huawei_data["day_kwh"] = _apply_daily_reset_guard("huawei", huawei_data["power_kw"], huawei_data["day_kwh"])
         points.append(_inverter_point("huawei", huawei_data))
-    except Exception:
+    except Exception as e:
         log.exception("Falha ao coletar dados da Huawei nesse ciclo")
+        huawei_error = str(e)
 
     try:
         fox_data = _collect_foxess(foxess, foxess_sn)
         fox_data["day_kwh"] = _apply_daily_reset_guard("foxess", fox_data["power_kw"], fox_data["day_kwh"])
         points.append(_inverter_point("foxess", fox_data))
         points.extend(_fox_history_points(foxess, foxess_sn))
-    except Exception:
+    except Exception as e:
         log.exception("Falha ao coletar dados da FoxESS nesse ciclo")
+        fox_error = str(e)
+
+    # O contador de falhas e o ponto de saúde são gravados sempre — inclusive
+    # quando os dois inversores falham nesse ciclo — pra que o alerta de
+    # "falha constante" funcione mesmo num apagão total de comunicação, que é
+    # exatamente quando ele mais importa.
+    huawei_failures = _record_attempt("huawei", huawei_error)
+    fox_failures = _record_attempt("foxess", fox_error)
+    health_points = [
+        _health_point("huawei", huawei_failures, huawei_error),
+        _health_point("foxess", fox_failures, fox_error),
+    ]
+    if huawei_failures == FAILURE_ALERT_THRESHOLD:
+        log.error("Huawei falhando ha %d ciclos seguidos: %s", huawei_failures, huawei_error)
+    if fox_failures == FAILURE_ALERT_THRESHOLD:
+        log.error("FoxESS falhando ha %d ciclos seguidos: %s", fox_failures, fox_error)
 
     if not points:
-        log.warning("Nenhum inversor respondeu nesse ciclo, nada gravado")
+        log.warning("Nenhum inversor respondeu nesse ciclo, nada gravado (exceto saude)")
+        write_api.write(bucket=bucket, org=org, record=health_points)
         return
 
+    points.extend(health_points)
+
     huawei_power_kw = huawei_data["power_kw"] if huawei_data else 0.0
-    huawei_day_kwh = huawei_data["day_kwh"] if huawei_data else 0.0
     fox_power_kw = fox_data["power_kw"] if fox_data else 0.0
-    fox_day_kwh = fox_data["day_kwh"] if fox_data else 0.0
     total_power_kw = huawei_power_kw + fox_power_kw
+    huawei_day_kwh = _carry_forward_day_kwh("huawei", huawei_data["day_kwh"] if huawei_data else None)
+    fox_day_kwh = _carry_forward_day_kwh("foxess", fox_data["day_kwh"] if fox_data else None)
     total_day_kwh = huawei_day_kwh + fox_day_kwh
     has_alarm = bool(huawei_data and huawei_data["has_alarm"])
 

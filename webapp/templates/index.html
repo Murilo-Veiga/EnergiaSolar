@@ -752,6 +752,7 @@
     // na próxima atualização, porque a lista inteira é recalculada do zero.
     const TEMP_THRESHOLD_C = 65; // ILUSTRATIVO — não validado na doc dos fabricantes (SIW300H/SIW200G); ajustar quando confirmado.
     const GERACAO_ABAIXO_MEDIA_PCT = 10;
+    const API_FAILURE_ALERT_THRESHOLD = 2; // igual ao FAILURE_ALERT_THRESHOLD do collector/main.py
     const INV_LABELS = { huawei: "Huawei", foxess: "FoxESS" };
 
     function computeAlerts(c) {
@@ -765,6 +766,16 @@
             sev: "critical", icon: "⚠",
             title: `${INV_LABELS[inv]} sem comunicação`,
             desc: INV_STATUS_META.sem_comunicacao.tip,
+          });
+        }
+        if (d.consecutive_failures >= API_FAILURE_ALERT_THRESHOLD) {
+          alerts.push({
+            key: `api_failure:${inv}`,
+            sev: "warning", icon: "🔌",
+            title: `Falha ao consultar a API da ${INV_LABELS[inv]} (${d.consecutive_failures}x seguidas)`,
+            desc: d.last_error
+              ? `Último erro: ${d.last_error} — "Gerado hoje" segue com o último valor bem-sucedido enquanto isso não normalizar.`
+              : `A coleta está falhando repetidamente — "Gerado hoje" segue com o último valor bem-sucedido enquanto isso não normalizar.`,
           });
         }
         if (d.temperature_c !== null && d.temperature_c !== undefined && d.temperature_c >= TEMP_THRESHOLD_C) {

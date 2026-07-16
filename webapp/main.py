@@ -235,8 +235,27 @@ def inverters():
                     "temperature_c": record.values.get("temperature_c"),
                     "status": status,
                 }
+        entry["consecutive_failures"], entry["last_error"] = _health_status(inverter)
         result[inverter] = entry
     return result
+
+
+def _health_status(inverter: str) -> tuple[int, str | None]:
+    """Falhas consecutivas do coletor ao consultar a API desse inversor —
+    gravadas a cada ciclo (sucesso ou falha), independente do ponto de
+    inverter_status (que só existe em ciclos bem-sucedidos)."""
+    flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -1h)
+      |> filter(fn: (r) => r._measurement == "collector_health" and r.inverter == "{inverter}" and r.plant_id == "{PLANT_TAG}")
+      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+      |> sort(columns: ["_time"], desc: true)
+      |> limit(n: 1)
+    '''
+    for table in query_api.query(flux):
+        for record in table.records:
+            return int(record.values.get("consecutive_failures") or 0), record.values.get("last_error")
+    return 0, None
 
 
 @app.get("/api/day-status")
