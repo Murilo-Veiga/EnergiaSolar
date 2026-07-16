@@ -5,6 +5,15 @@ Painel próprio de monitoramento para a usina solar residencial, rodando
 diretamente pela **API oficial do seu fabricante** (Huawei FusionSolar e
 FoxESS Cloud) — sem depender de nenhum acesso de usuário de terceiros.
 
+**Sumário:** [Arquitetura](#arquitetura) · [Como rodar](#como-rodar) ·
+[Detalhes da instalação](#detalhes-da-instalação) ·
+[Fontes de dados oficiais](#fontes-de-dados-oficiais) ·
+[Limitações conhecidas](#limitações-conhecidas) ·
+[Design do painel](#design-do-painel) ·
+[Consumo por unidade consumidora](#consumo-por-unidade-consumidora-celesc) ·
+[Estrutura do projeto](#estrutura-do-projeto) ·
+[Pendências](#pendências--próximos-passos)
+
 ## Arquitetura
 
 ```
@@ -40,12 +49,20 @@ docker compose up -d --build
 
 `.env` nunca é commitado (está no `.gitignore`); use `.env.example` como referência.
 
+## Detalhes da instalação
+
+- **20 módulos de 610 Wp** = 12,2 kWp instalados (nameplate DC)
+- **Inversor FoxESS** (SIW200G-5K, 5 kW) — 13 módulos
+- **Inversor Huawei** (SIW300H-3K, 3 kW) — 7 módulos
+- **Capacidade AC total: 8 kW**
+- Endereço: R. Guanabara, 3787 — Fátima, Joinville-SC
+
 ## Fontes de dados oficiais
 
 | Inversor | Fabricante/API | Identificador | Capacidade |
 |---|---|---|---|
-| A | **FoxESS Cloud** | `deviceSN=J0MF502056LD436`, modelo `SIW200G M050 W1` | 5 kW |
-| B | **Huawei FusionSolar (NBI)** | `stationCode=NE=56719752`, `devDn=NE=56719754`, modelo `SIW300H M030 W00` | 3 kW |
+| FoxESS | **FoxESS Cloud** | `deviceSN=J0MF502056LD436`, modelo `SIW200G M050 W1` | 5 kW |
+| Huawei | **Huawei FusionSolar (NBI)** | `stationCode=NE=56719752`, `devDn=NE=56719754`, modelo `SIW300H M030 W00` | 3 kW |
 
 (O nome comercial "SIW200G-5K"/"SIW300H-3K" usado pela instaladora é o
 rebrand — o hardware/telemetria real é Huawei e FoxESS.)
@@ -101,6 +118,13 @@ Documentação oficial: https://www.foxesscloud.com/public/i18n/en/OpenApiDocume
 3. **Histórico começa em 13/07/2026**: confirmado via `getKpiStationDay`
    (Huawei) e `device/report/query` (FoxESS) que a usina só passou a gerar
    de fato nessa data — não há dado real anterior a recuperar.
+4. **"Gerado hoje" fica em 0 até o inversor acordar de manhã**: as nuvens da
+   Huawei/FoxESS cacheiam o total do dia anterior e só atualizam quando o
+   inversor manda telemetria nova — de madrugada ele fica dormindo. O
+   coletor detecta isso e trata como zero até ver potência real (`power_kw
+   > 0`) nesse dia local (`_apply_daily_reset_guard` em `collector/main.py`),
+   pra não mostrar o total de ontem como se fosse de hoje. Comportamento
+   esperado, não indica falha de coleta.
 
 ## Consumo por unidade consumidora (Celesc)
 
@@ -200,13 +224,43 @@ mesmo ciclo (e vice-versa).
   fatura mais recente, qualquer uma das 2 UCs) e **nascer/pôr do sol**
   (Open-Meteo) — todos exibidos no card "Status do dia".
 
-## Detalhes da instalação
+### Central de alertas
 
-- **20 módulos de 610 Wp** = 12,2 kWp instalados (nameplate DC)
-- **Inversor FoxESS** (SIW200G-5K, 5 kW) — 13 módulos
-- **Inversor Huawei** (SIW300H-3K, 3 kW) — 7 módulos
-- **Capacidade AC total: 8 kW**
-- Endereço: R. Guanabara, 3787 — Fátima, Joinville-SC
+Accordion no topo do Dashboard (fechado por padrão, com contador de alertas
+ativos no badge) que resume tudo que merece atenção. Quais alertas existem
+não tem estado próprio: a lista é recalculada do zero a cada atualização
+(30s) a partir dos mesmos endpoints que já alimentam o resto do dashboard —
+se uma condição deixa de existir, o alerta correspondente some sozinho na
+atualização seguinte (o único estado guardado no cliente é o de "lido", ver
+abaixo):
+
+| Alerta | Origem | Severidade |
+|---|---|---|
+| Inversor sem comunicação | `/api/inverters` → `status == "sem_comunicacao"` | crítico |
+| Temperatura do inversor acima do limiar | `/api/inverters` → `temperature_c` | atenção |
+| Bandeira amarela/vermelha ativa | `/api/day-status` → `bandeira` | atenção |
+| Geração do dia ≥10% abaixo da média da semana | `/api/summary` (hoje) vs. `/api/history?range=semana` (média) | informativo |
+
+O limiar de temperatura (`TEMP_THRESHOLD_C = 65`, em `templates/index.html`)
+é **ilustrativo** — não validamos contra a doc oficial dos modelos exatos
+(SIW300H-3K / SIW200G-5K), só pesquisa geral de mercado (ver pendências).
+
+Cada alerta tem um botão "Marcar como lida", que some com ele da lista e do
+contador do badge. A marcação vive em `sessionStorage` (chave por tipo de
+alerta, ex. `bandeira:amarela`), então dura só pro acesso atual — se fechar a
+aba/navegador e abrir de novo, alertas cuja condição ainda esteja ativa
+voltam a aparecer como não lidos. Isso é intencional: marcar como lida serve
+pra não ficar repetindo o mesmo aviso na mesma visita, não pra silenciar a
+condição de vez.
+
+### Linha de média nos gráficos
+
+Os gráficos "Geração diária" (Dashboard e Histórico) mostram uma linha
+tracejada vermelha com a média do período selecionado (diária pra
+semana/mês, mensal pro ano), num segundo dataset do Chart.js sobreposto às
+barras. O valor fica sempre visível abaixo do total do período, e passar o
+mouse em qualquer barra mostra a média junto no tooltip (mesmo índice do
+eixo X, `interaction.mode: "index"`).
 
 ## Estrutura do projeto
 
@@ -242,5 +296,6 @@ mesmo ciclo (e vice-versa).
 
 - [ ] Confirmar o formato real do `getAlarmList` da Huawei quando um alarme de verdade acontecer (ver "Design do painel")
 - [ ] Confirmar se a temperatura do inversor Huawei sai de `0.0` durante geração de pico
+- [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, hoje ilustrativo) contra a doc oficial do SIW300H-3K/SIW200G-5K (ver "Central de alertas")
 - [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura pós-13/07 chegar (ver "Consumo por unidade consumidora")
 - [ ] Enviar a fatura da UC `298240601131` (Elizabeth Rech) todo mês também — hoje só a de Guanabara é gerada com facilidade pelo usuário

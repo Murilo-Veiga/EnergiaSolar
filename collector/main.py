@@ -17,6 +17,31 @@ HUAWEI_DEV_TYPE_ID = 38  # inversor (fixo na taxonomia de tipos de dispositivo d
 PLANT_TAG = "casa"
 BRAZIL_TZ = timezone(timedelta(hours=-3))
 
+# Guarda em memória pra detectar "dia novo, contador do fabricante ainda não
+# resetou" (ver _apply_daily_reset_guard) — por inversor.
+_daily_reset_state: dict[str, dict] = {}
+
+
+def _apply_daily_reset_guard(inverter: str, power_kw: float, day_kwh: float) -> float:
+    """A Huawei/FoxESS cacheiam o total do dia na nuvem deles e só atualizam
+    quando o inversor manda telemetria nova — à noite o inversor dorme e não
+    manda nada novo, então da meia-noite local até ele acordar (perto do
+    nascer do sol) o valor que a API retorna ainda é o total de ONTEM, não
+    zero. Sem um campo de "última atualização" confiável pra esse valor
+    específico, usamos geração real (power_kw > 0) como prova de que o
+    inversor já acordou hoje — até isso acontecer, tratamos o dia como
+    zerado. Estado por inversor, reiniciado a cada troca de dia local; some
+    num restart do container, o que na pior hipótese só reseta a marca de
+    "já gerou hoje" (segura, volta a True no próximo ciclo com sol)."""
+    today = datetime.now(BRAZIL_TZ).date()
+    state = _daily_reset_state.setdefault(inverter, {"date": today, "started": False})
+    if state["date"] != today:
+        state["date"] = today
+        state["started"] = False
+    if power_kw > 0:
+        state["started"] = True
+    return day_kwh if state["started"] else 0.0
+
 
 def _fox_history_points(foxess: FoxessClient, sn: str, hours_back: int = 3) -> list[Point]:
     """Curva de potência de alta resolução das últimas horas (FoxESS history/query).
@@ -100,12 +125,14 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
 
     try:
         huawei_data = _collect_huawei(huawei, station_code, dev_dn)
+        huawei_data["day_kwh"] = _apply_daily_reset_guard("huawei", huawei_data["power_kw"], huawei_data["day_kwh"])
         points.append(_inverter_point("huawei", huawei_data))
     except Exception:
         log.exception("Falha ao coletar dados da Huawei nesse ciclo")
 
     try:
         fox_data = _collect_foxess(foxess, foxess_sn)
+        fox_data["day_kwh"] = _apply_daily_reset_guard("foxess", fox_data["power_kw"], fox_data["day_kwh"])
         points.append(_inverter_point("foxess", fox_data))
         points.extend(_fox_history_points(foxess, foxess_sn))
     except Exception:
@@ -123,10 +150,17 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
     total_day_kwh = huawei_day_kwh + fox_day_kwh
     has_alarm = bool(huawei_data and huawei_data["has_alarm"])
 
-    # generated_kwh é gravado sempre no mesmo timestamp (meio-dia UTC) para o dia
-    # corrente, para que cada ciclo sobrescreva o mesmo ponto em vez de criar um
-    # ponto novo por ciclo — mantém 1 registro por dia no InfluxDB.
-    today_noon_utc = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    # generated_kwh é gravado sempre no mesmo timestamp (meia-noite local) para
+    # o dia corrente, para que cada ciclo sobrescreva o mesmo ponto em vez de
+    # criar um ponto novo por ciclo — mantém 1 registro por dia no InfluxDB.
+    # Importante usar meia-noite em horário do Brasil (não meio-dia UTC): meio-dia
+    # UTC = 9h no Brasil, então das 0h às 9h locais esse timestamp ficaria no
+    # futuro — e toda query do webapp usa range() sem stop explícito, que por
+    # padrão exclui pontos futuros (stop: now()), fazendo "hoje" mostrar o
+    # último dia visível (ontem) até as 9h da manhã. Meia-noite local já
+    # nasce no passado assim que o dia começa, então nunca é excluída.
+    today_midnight_brt = datetime.now(BRAZIL_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_point_ts = today_midnight_brt.astimezone(timezone.utc)
 
     plant_point = (
         Point("plant_status")
@@ -143,7 +177,7 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
         Point("daily_generation")
         .tag("plant_id", PLANT_TAG)
         .field("generated_kwh", total_day_kwh)
-        .time(today_noon_utc)
+        .time(today_point_ts)
     )
 
     write_api.write(bucket=bucket, org=org, record=points)
