@@ -212,12 +212,31 @@ def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+def _yesterday_generated_kwh():
+    """Penúltimo ponto de daily_generation (o último é hoje) — 1 ponto por
+    dia, então basta pegar os 2 mais recentes e descartar o de hoje."""
+    flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -4d)
+      |> filter(fn: (r) => r._measurement == "daily_generation" and r._field == "generated_kwh" and r.plant_id == "{PLANT_TAG}")
+      |> sort(columns: ["_time"], desc: true)
+      |> limit(n: 2)
+    '''
+    values = [record.get_value() for table in query_api.query(flux) for record in table.records]
+    return values[1] if len(values) >= 2 else None
+
+
 @app.get("/api/summary")
 def summary():
     instantaneous = _last_value("plant_status", "instantaneous_power_kw")
     installed = _last_value("plant_status", "installed_power_kwp", "-30d")
     today_generated = _last_value("daily_generation", "generated_kwh", "-3d")
     has_alarm = _last_value("plant_status", "has_alarm", "-1h")
+
+    yesterday_generated = _yesterday_generated_kwh()
+    today_vs_yesterday_pct = None
+    if yesterday_generated and today_generated is not None:
+        today_vs_yesterday_pct = round((today_generated - yesterday_generated) / yesterday_generated * 100)
 
     is_online = instantaneous is not None and (instantaneous > 0 or (today_generated or 0) > 0)
     status = "alerta" if has_alarm else ("online" if is_online else "pendente")
@@ -245,6 +264,7 @@ def summary():
         "installed_power_kwp": installed,
         "today_generated_kwh": today_generated,
         "today_economia_brl": today_economia_brl,
+        "today_vs_yesterday_pct": today_vs_yesterday_pct,
         "peak_power_kw": peak_power_kw,
         "peak_power_at": peak_power_at,
         "status": status,

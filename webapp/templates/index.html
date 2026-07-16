@@ -311,6 +311,7 @@
           <div class="card stat-card">
             <div class="l">Gerado hoje</div>
             <div class="v"><span id="kpi-today">--</span><span class="unit"> kWh</span></div>
+            <div class="sub" id="kpi-today-delta" hidden></div>
             <div class="sub" id="kpi-today-eco" hidden></div>
           </div>
           <div class="card stat-card">
@@ -1092,6 +1093,17 @@
         ecoEl.innerHTML = `≈ ${fmtBRL(d.today_economia_brl)} <span class="tag">estimado</span>`;
       } else {
         ecoEl.hidden = true;
+      }
+
+      const deltaEl = document.getElementById("kpi-today-delta");
+      if (d.today_vs_yesterday_pct !== null && d.today_vs_yesterday_pct !== undefined) {
+        deltaEl.hidden = false;
+        const pct = d.today_vs_yesterday_pct;
+        const up = pct >= 0;
+        deltaEl.style.color = up ? "var(--good)" : "var(--critical)";
+        deltaEl.innerHTML = `${up ? "▲" : "▼"} ${Math.abs(pct)}% <span style="color:var(--ink-muted)">vs. ontem</span>`;
+      } else {
+        deltaEl.hidden = true;
       }
 
       document.getElementById("updated-at").textContent = new Date(d.updated_at).toLocaleTimeString("pt-BR");

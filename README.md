@@ -15,6 +15,7 @@ FoxESS Cloud) — sem depender de nenhum acesso de usuário de terceiros.
 [Consumo por unidade consumidora](#consumo-por-unidade-consumidora-celesc) ·
 [Princípio de design](#princípio-de-design-fácil-de-ler-pra-qualquer-idade) ·
 [Selo "novo"](#regra-selo-novo-por-5-dias) ·
+[Auditoria (2026-07-16)](#auditoria-2026-07-16) ·
 [Estrutura do projeto](#estrutura-do-projeto) ·
 [Pendências](#pendências--próximos-passos)
 
@@ -289,6 +290,14 @@ condição de vez.
 
 ### Outros campos
 
+- **"Gerado hoje" vs. ontem**: mockup iterado e aprovado em Artifact antes do
+  código real — `▲`/`▼` colorido (verde/vermelho) com a variação percentual,
+  logo abaixo do valor em kWh (a % é sobre produção, não sobre a estimativa
+  em R$, por isso fica acima do "estimado"). `/api/summary` calcula
+  `today_vs_yesterday_pct` comparando com o penúltimo ponto de
+  `daily_generation` (`_yesterday_generated_kwh()` em `webapp/main.py`) — sem
+  esse valor (ex.: ontem a usina ainda não tinha ligado), o indicador
+  simplesmente não aparece.
 - **Temperatura do inversor**: Huawei via `getDevRealKpi` (campo
   `temperature`), FoxESS via a variável `invTemperation`. A Huawei retornou
   `0.0` em todos os testes até agora — pode ser normal pra esse modelo fora
@@ -499,7 +508,7 @@ recalculado nas horas de sol (`clima-horas-de-sol`), os dois adicionados em
 | Rota | Retorna |
 |---|---|
 | `GET /` | Página do dashboard |
-| `GET /api/summary` | KPIs atuais: potência, geração/economia do dia, pico do dia + horário, status |
+| `GET /api/summary` | KPIs atuais: potência, geração/economia do dia (+ variação % vs. ontem), pico do dia + horário, status |
 | `GET /api/inverters` | Potência/geração/temperatura/status (gerando, online sem geração, sem comunicação) por inversor, + `consecutive_failures`/`last_error` da coleta |
 | `GET /api/day-status` | Status do dia: clima (recalculado nas horas de sol), irradiância, nuvens por hora, sol, alarme (+ detalhe), geração, bandeira vigente |
 | `GET /api/history?range=semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) e `previous_total_kwh`/`previous_total_brl` do período anterior |
@@ -512,6 +521,149 @@ recalculado nas horas de sol (`clima-horas-de-sol`), os dois adicionados em
 | `POST /api/consumption/upload` | Recebe fatura PDF da Celesc (multipart), extrai e grava no InfluxDB |
 | `GET /api/consumption/summary` | Resumo por UC (última fatura) + economia estimada |
 | `GET /api/consumption/history?uc=X` | Série histórica de consumo (kWh/R$) de uma UC |
+
+## Auditoria (2026-07-16)
+
+Revisão ponta a ponta pedida pelo usuário: consultas a API, dados exibidos no
+Dashboard, comportamento na virada do dia, coerência do Histórico com o banco,
+e o que falta coletar hoje pra não faltar dado daqui 12 meses. Achados abaixo,
+verificados direto no código e no InfluxDB rodando (não é uma estimativa).
+
+### 1. Consultas a APIs — inventário e frequência
+
+**Coletor → Huawei/FoxESS** (a cada `COLLECT_INTERVAL_SECONDS`, 300s/5min):
+
+| Chamada | Cadência real | Observação |
+|---|---|---|
+| Huawei `login`, `getStationRealKpi`, `getDevRealKpi` | todo ciclo (300s) | nunca falhou nesse intervalo em produção |
+| Huawei `getAlarmList` | a cada 900s (1 a cada 3 ciclos) | desacoplado depois do incidente de rate limit — ver "Falhas de coleta" |
+| FoxESS `device/real/query` | todo ciclo (300s) | dentro do limite (1440/dia) com folga |
+| FoxESS `device/history/query` (curva intradiária, 3h de janela) | todo ciclo (300s) | **sobreposição**: cada chamada busca 3h, rodando a cada 5min — ~97% do intervalo já foi buscado no ciclo anterior. Não é incorreto (InfluxDB dedup por timestamp), só busca mais dado do que precisaria. |
+
+**Webapp → Open-Meteo**: cacheado por 2h desde a auditoria anterior (ver
+"Status do dia: clima e previsão") — antes disso era ao vivo a cada chamada.
+
+**Frontend → webapp** (`setInterval`, todos rodando em paralelo o tempo todo
+que a aba estiver aberta):
+
+| Timer | Intervalo | Endpoints chamados |
+|---|---|---|
+| `refreshSummary` | 30s | `/api/summary` |
+| `refreshInverters` | 30s | `/api/inverters` |
+| `refreshDayStatus` | 30s | `/api/day-status` |
+| `refreshAlerts` | 30s | `/api/inverters` + `/api/day-status` + `/api/summary` + `/api/history?range=semana` |
+| `refreshForecast` | 30min | `/api/forecast` |
+
+**Achado**: `refreshAlerts` refaz sozinho 3 das 4 chamadas que os outros
+timers já fazem (`/api/inverters`, `/api/day-status`, `/api/summary`) — no
+mesmo intervalo de 30s, sem cache nem compartilhamento de resultado entre
+timers. Ou seja, a cada 30s o browser faz ~7 requisições quando 4
+bastariam, e a mais cara delas (`/api/history?range=semana`, que já embute
+2 consultas ao InfluxDB — o período e o período anterior) roda inteira toda
+vez só pra alimentar 1 alerta. Não é um bug — os números continuam corretos
+— é desperdício de consulta ao banco que vale revisitar (dá pra fazer
+`refreshAlerts` reaproveitar o resultado dos outros 3 fetches em vez de
+buscar de novo).
+
+### 2. Dados do Dashboard — fonte e comportamento na virada da meia-noite
+
+| Dado exibido | Fonte / janela da consulta | Zera à meia-noite (BRT)? |
+|---|---|---|
+| Potência instantânea | último ponto de `plant_status` | não se aplica (é "agora", não "hoje") — vai pra ~0 sozinho à noite por não ter sol, não por lógica de data |
+| **Gerado hoje** | último ponto de `daily_generation` (janela `-3d`) | **sim**, mas com até ~5min de atraso: o coletor só escreve o ponto zerado do novo dia no primeiro ciclo depois da virada — entre 00:00 e esse ciclo, o painel ainda mostra o total de ontem |
+| **Gerado hoje vs. ontem (▲/▼)** | `today_generated_kwh` − penúltimo ponto de `daily_generation` | correto mas pouco útil logo após meia-noite: mostra **"▼ 100%"** todo dia de madrugada (0 gerado ainda vs. o total de ontem) até o sol nascer — matematicamente certo, mas pode ler como alarme falso às 3h da manhã |
+| kWh/temperatura por inversor | último ponto de `inverter_status` (janela `-1h`) | sim, mesmo atraso de ~5min do item acima (mesmo guard de reset por inversor) |
+| **Pico hoje (kW + horário)** | máximo de `plant_status.instantaneous_power_kw` numa **janela rolante de 24h** (`range(start: -24h)`) | **não zera na virada** — é uma janela móvel, não "desde a meia-noite de hoje". Um pico de ontem à tarde continua aparecendo como "Pico hoje" por até 24h depois de ter acontecido, só sai da tela quando "envelhece" pra fora da janela. O rótulo diz "hoje", mas a lógica não é por dia-calendário. |
+| Situação / alarme | `plant_status.has_alarm` (janela `-1h`) | não é por dia, é "última hora" — comportamento correto pro que se propõe |
+| Bandeira tarifária | fatura mais recente | não é diário (é mensal), correto como está |
+| Clima / irradiância / nuvens | Open-Meteo, recalculado só nas horas de sol de hoje | sim, muda de dia porque a própria Open-Meteo já entrega por data |
+
+**Resumindo o achado principal deste item**: só o "Pico hoje" tem uma
+inconsistência real entre o nome e o comportamento — os demais "hoje" zeram
+corretamente na virada (com uma folga de até ~5min, que é o próprio
+intervalo de coleta, não um bug). Trocar `range(start: -24h)` por um
+range calculado a partir da meia-noite local resolveria, mas fica registrado
+aqui como achado, não corrigido nesta auditoria.
+
+### 3. Histórico vs. banco de dados
+
+Comparado direto: `/api/history` (o que a aba mostra) contra uma consulta
+crua no InfluxDB pro mesmo measurement — **os 4 dias batem exatamente**,
+sem lacuna nem duplicata:
+
+```
+2026-07-13   26.34 kWh
+2026-07-14   30.88 kWh
+2026-07-15   30.13 kWh
+2026-07-16   39.52 kWh
+```
+
+Também cruzei a soma por inversor (`/api/history/inverters`, usada em
+"Saúde da usina") contra o total do dia (`/api/history`) — bate exatamente
+nos 2 dias em que os dois existem (15/07: 8,13+22,00=30,13 ✓; 16/07:
+10,02+29,50=39,52 ✓), confirmando que a derivação por inversor não diverge
+do total oficial.
+
+**Achado**: os timestamps dos pontos de `daily_generation` não são
+consistentes entre si. Os 3 primeiros dias (13, 14 e 15/07) foram gravados
+às **12:00 UTC**; a partir de 16/07 os pontos passaram a usar **03:00 UTC**
+(meia-noite BRT exata, que é a convenção documentada em `collector/main.py`
+hoje). Isso sugere que os 3 primeiros pontos vieram de uma versão anterior
+do coletor ou de uma carga inicial, antes da convenção de "sempre meia-noite
+BRT" ser fixada. Não afeta nada visível hoje — toda leitura no painel só usa
+a **data** do ponto, nunca a hora exata —, mas fica registrado porque uma
+futura análise que dependa do horário exato do ponto (não só da data)
+encontraria essa inconsistência nos primeiros 3 dias.
+
+### 4. Retenção e lacunas pra daqui 12 meses
+
+**Retenção do InfluxDB**: confirmado direto no banco (`influx bucket list`)
+— o bucket `solar-home` está configurado com **retenção infinita**. Nada
+que já foi gravado vai ser apagado sozinho; o que for coletado a partir de
+hoje estará disponível daqui 12 meses.
+
+**O que já está sendo guardado e vai acumular bem**:
+`daily_generation` (total/dia), `inverter_status` (potência + energia do dia
+por inversor, a cada 5min), `plant_status` (potência instantânea + alarme, a
+cada 5min), `collector_health` (falha/sucesso de cada API por ciclo, nunca
+sobrescrito — dá pra reconstruir um histórico de confiabilidade da coleta),
+`consumption` (faturas) e `annotation` (suas anotações manuais).
+
+**O que NÃO está sendo guardado, e devia se a ideia é ter mais material
+daqui 12 meses**:
+
+- **Clima/irradiância histórico**: `/api/day-status` e `/api/forecast`
+  buscam radiação solar, cobertura de nuvem e código de tempo na Open-Meteo,
+  mas **nenhum desses valores é gravado no InfluxDB** — ficam só em cache de
+  2h e desaparecem. Daqui 12 meses, não vai dar pra responder "esse mês foi
+  mais nublado que o mesmo mês do ano passado?" ou cruzar geração real com
+  irradiância histórica, porque o dado de irradiância de hoje simplesmente
+  não vai mais existir amanhã. É o maior buraco encontrado nesta auditoria —
+  resolver é barato (1 `Point` novo por dia no coletor ou no webapp,
+  reaproveitando a mesma chamada que já existe) e o custo de não resolver só
+  cresce quanto mais tempo passar sem começar a gravar.
+- **Performance Ratio, geração teórica, impacto ambiental** (`getKpiStationDay`
+  da Huawei): já mapeado como pendência em "Menu Saúde da usina" — vale
+  reforçar aqui que cada dia sem coletar isso é um dia que não dá mais pra
+  recuperar depois (a Huawei não garante manter esse histórico disponível
+  indefinidamente do lado dela).
+- **Tensão por string** (`pv1Volt`/`pv2Volt` da FoxESS): mesma lógica —
+  pendência conhecida, mas diagnóstico de sombra/sujeira por fileira só
+  funciona com histórico acumulado, então quanto antes começar a coletar,
+  mais cedo fica útil.
+
+### Resumo priorizado
+
+| Achado | Severidade | Ação sugerida |
+|---|---|---|
+| Clima/irradiância não é persistido | Alto (janela de oportunidade perdida todo dia) | Gravar 1 ponto/dia no InfluxDB com o que a Open-Meteo já retorna |
+| "Pico hoje" é janela rolante de 24h, não por dia-calendário | Médio (rótulo engana) | Trocar `range(start: -24h)` por range desde a meia-noite local |
+| `refreshAlerts` duplica 3 chamadas que já existem | Baixo (desperdício, não incorreção) | Reaproveitar os fetches dos outros timers em vez de refazer |
+| "▼ 100% vs. ontem" todo início de manhã | Baixo (correto, mas pouco útil) | Considerar esconder o indicador antes do nascer do sol |
+| Timestamp inconsistente nos 3 primeiros dias de `daily_generation` | Baixo (não afeta nada visível hoje) | Só documentar (feito) — não vale reescrever dado histórico por causa disso |
+
+Nenhum desses itens foi corrigido nesta auditoria — ficou registrado pra
+decidir prioridade com calma.
 
 ## Pendências / próximos passos
 
