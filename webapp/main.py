@@ -1,14 +1,17 @@
 import os
-from datetime import datetime, timezone
+from datetime import date as date_type
+from datetime import datetime, timedelta, timezone
 
 import requests
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
+from pydantic import BaseModel, Field
 
 from celesc_bill_parser import CelescBillParseError, parse_bill
+from report_pdf import build_history_report_pdf
 
 INFLUX_URL = os.environ["INFLUXDB_URL"]
 INFLUX_TOKEN = os.environ["INFLUXDB_TOKEN"]
@@ -21,6 +24,11 @@ PLANT_LON = os.environ["PLANT_LON"]
 # série com tag de plant_id diferente ficaria numa tabela separada no Flux e
 # poderia ser retornada no lugar da série atual.
 PLANT_TAG = "casa"
+
+# Mesmo fuso do collector/main.py — usado só pra agrupar pontos de
+# inverter_status (gravados em UTC "de verdade", não à meia-noite BRT como
+# daily_generation) no dia-calendário correto de Joinville.
+BRAZIL_TZ = timezone(timedelta(hours=-3))
 
 # Códigos de clima WMO (usados pelo Open-Meteo) -> (descrição em pt-BR, favorabilidade p/ geração)
 WMO_CODES = {
@@ -299,6 +307,21 @@ def forecast():
 RANGE_DAYS = {"semana": 7, "mes": 30, "ano": 365}
 
 
+def _period_total_kwh(days: int, start_offset_days: int = 0) -> float:
+    """Soma de generated_kwh num intervalo de `days` dias terminando `start_offset_days`
+    dias atrás — usado pra comparar o período atual com o imediatamente anterior."""
+    flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -{days + start_offset_days}d, stop: -{start_offset_days}d)
+      |> filter(fn: (r) => r._measurement == "daily_generation" and r._field == "generated_kwh" and r.plant_id == "{PLANT_TAG}")
+      |> sum()
+    '''
+    for table in query_api.query(flux):
+        for record in table.records:
+            return record.get_value() or 0.0
+    return 0.0
+
+
 @app.get("/api/history")
 def history(range: str = "mes"):
     days = RANGE_DAYS.get(range, 30)
@@ -325,11 +348,157 @@ def history(range: str = "mes"):
             if kwh is not None:
                 total_kwh += kwh
 
+    # período imediatamente anterior, mesma duração — pra comparação tipo "12% a mais que mês passado"
+    previous_total_kwh = _period_total_kwh(days, start_offset_days=days)
+
     return {
         "rows": rows,
         "total_kwh": round(total_kwh, 1),
         "total_brl": round(total_kwh * tarifa, 2) if tarifa else None,
+        "previous_total_kwh": round(previous_total_kwh, 1),
+        "previous_total_brl": round(previous_total_kwh * tarifa, 2) if tarifa else None,
     }
+
+
+@app.get("/api/history/records")
+def history_records():
+    """Recordes de todo o período de operação da usina (não só o range selecionado)."""
+    best_day_flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: 0)
+      |> filter(fn: (r) => r._measurement == "daily_generation" and r._field == "generated_kwh" and r.plant_id == "{PLANT_TAG}")
+      |> sort(columns: ["_value"], desc: true)
+      |> limit(n: 1)
+    '''
+    best_day = best_day_date = None
+    for table in query_api.query(best_day_flux):
+        for record in table.records:
+            best_day = record.get_value()
+            best_day_date = record.get_time().date().isoformat()
+
+    best_month_flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: 0)
+      |> filter(fn: (r) => r._measurement == "daily_generation" and r._field == "generated_kwh" and r.plant_id == "{PLANT_TAG}")
+      |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)
+      |> sort(columns: ["_value"], desc: true)
+      |> limit(n: 1)
+    '''
+    best_month = best_month_label = None
+    for table in query_api.query(best_month_flux):
+        for record in table.records:
+            best_month = record.get_value()
+            best_month_label = record.get_time().strftime("%m/%Y")
+
+    peak_flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: 0)
+      |> filter(fn: (r) => r._measurement == "plant_status" and r._field == "instantaneous_power_kw" and r.plant_id == "{PLANT_TAG}")
+      |> sort(columns: ["_value"], desc: true)
+      |> limit(n: 1)
+    '''
+    peak_power_kw = peak_power_at = None
+    for table in query_api.query(peak_flux):
+        for record in table.records:
+            peak_power_kw = record.get_value()
+            peak_power_at = record.get_time().isoformat()
+
+    return {
+        "best_day_kwh": round(best_day, 1) if best_day is not None else None,
+        "best_day_date": best_day_date,
+        "best_month_kwh": round(best_month, 1) if best_month is not None else None,
+        "best_month_label": best_month_label,
+        "peak_power_kw": peak_power_kw,
+        "peak_power_at": peak_power_at,
+    }
+
+
+RANGE_LABEL_PDF = {"semana": "Últimos 7 dias", "mes": "Últimos 30 dias", "ano": "Últimos 12 meses"}
+
+
+@app.get("/api/history/report.pdf")
+def history_report_pdf(range: str = "mes"):
+    data = history(range)
+    installed_kwp = _last_value("plant_status", "installed_power_kwp", "-30d")
+
+    delta_label = None
+    if data["previous_total_kwh"]:
+        pct = round((data["total_kwh"] - data["previous_total_kwh"]) / data["previous_total_kwh"] * 100)
+        arrow = "▲" if pct >= 0 else "▼"
+        delta_label = f"{arrow} {abs(pct)}% vs. período anterior"
+
+    pdf_bytes = build_history_report_pdf(
+        period_label=RANGE_LABEL_PDF.get(range, "Período selecionado"),
+        rows=data["rows"],
+        total_kwh=data["total_kwh"],
+        total_brl=data["total_brl"] or 0.0,
+        installed_kwp=installed_kwp,
+        delta_label=delta_label,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="solar-home-{range}.pdf"'},
+    )
+
+
+@app.get("/api/history/inverters")
+def history_inverters(range: str = "mes"):
+    """Geração diária por inversor. Não precisa de nenhum dado novo do
+    coletor: deriva do último inverter_status.day_kwh de cada dia (mesma
+    lógica de "o último valor do dia é o total do dia" que já vale pro
+    daily_generation), só que por inversor em vez do total da usina."""
+    days = RANGE_DAYS.get(range, 30)
+    flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -{days}d)
+      |> filter(fn: (r) => r._measurement == "inverter_status" and r._field == "day_kwh" and r.plant_id == "{PLANT_TAG}")
+      |> sort(columns: ["_time"])
+    '''
+    by_day: dict[str, dict[str, float]] = {}
+    for table in query_api.query(flux):
+        for record in table.records:
+            date = record.get_time().astimezone(BRAZIL_TZ).date().isoformat()
+            inverter = record.values.get("inverter")
+            by_day.setdefault(date, {})[inverter] = record.get_value()
+
+    rows = [
+        {"date": date, "huawei_kwh": vals.get("huawei"), "foxess_kwh": vals.get("foxess")}
+        for date, vals in sorted(by_day.items())
+    ]
+    return {"rows": rows}
+
+
+class AnnotationIn(BaseModel):
+    date: date_type
+    note: str = Field(min_length=1, max_length=280)
+
+
+@app.post("/api/annotations")
+def create_annotation(body: AnnotationIn):
+    """Uma nota por dia: gravar de novo no mesmo dia sobrescreve a anterior
+    (mesma tag/timestamp, comportamento padrão do InfluxDB) — mantém simples
+    em vez de virar uma lista por dia."""
+    ts = datetime(body.date.year, body.date.month, body.date.day, tzinfo=BRAZIL_TZ)
+    point = Point("annotation").tag("plant_id", PLANT_TAG).field("note", body.note.strip()).time(ts.astimezone(timezone.utc))
+    write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
+    return {"date": body.date.isoformat(), "note": body.note.strip()}
+
+
+@app.get("/api/annotations")
+def list_annotations(range: str = "mes"):
+    days = RANGE_DAYS.get(range, 30)
+    flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -{days}d)
+      |> filter(fn: (r) => r._measurement == "annotation" and r._field == "note" and r.plant_id == "{PLANT_TAG}")
+      |> sort(columns: ["_time"], desc: true)
+    '''
+    rows = []
+    for table in query_api.query(flux):
+        for record in table.records:
+            rows.append({"date": record.get_time().astimezone(BRAZIL_TZ).date().isoformat(), "note": record.get_value()})
+    return {"rows": rows}
 
 
 def _consumption_point(uc, ano, mes, kwh, *, total_brl=None, dias=None, bandeira=None, bandeira_valor=None, source):

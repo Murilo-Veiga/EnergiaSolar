@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py celesc_bill_parser.py ./
+COPY main.py celesc_bill_parser.py report_pdf.py ./
 COPY templates ./templates
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

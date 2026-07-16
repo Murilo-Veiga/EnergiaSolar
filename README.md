@@ -5,15 +5,47 @@ Painel próprio de monitoramento para a usina solar residencial, rodando
 diretamente pela **API oficial do seu fabricante** (Huawei FusionSolar e
 FoxESS Cloud) — sem depender de nenhum acesso de usuário de terceiros.
 
-**Sumário:** [Arquitetura](#arquitetura) · [Como rodar](#como-rodar) ·
+**Sumário:** [Princípio de design](#princípio-de-design-fácil-de-ler-pra-qualquer-idade) ·
+[Arquitetura](#arquitetura) · [Como rodar](#como-rodar) ·
 [Detalhes da instalação](#detalhes-da-instalação) ·
 [Fontes de dados oficiais](#fontes-de-dados-oficiais) ·
 [Limitações conhecidas](#limitações-conhecidas) ·
 [Design do painel](#design-do-painel) ·
+[Aba Histórico](#aba-histórico) · [Menu Saúde da usina](#menu-saúde-da-usina) ·
 [Falhas de coleta e fallback seguro](#falhas-de-coleta-e-fallback-seguro) ·
 [Consumo por unidade consumidora](#consumo-por-unidade-consumidora-celesc) ·
 [Estrutura do projeto](#estrutura-do-projeto) ·
 [Pendências](#pendências--próximos-passos)
+
+## Princípio de design: fácil de ler pra qualquer idade
+
+**Toda melhoria futura no painel — nova métrica, novo menu, novo alerta —
+precisa ser pensada pra alguém sem bagagem técnica (ex.: usuário idoso)
+conseguir olhar e entender o que está vendo, sem precisar perguntar.** Isso
+vale mais que qualquer preferência técnica de nomenclatura. Na prática:
+
+- **Título em linguagem direta, não jargão técnico.** "A usina está
+  aproveitando bem o sol?" em vez de "Performance Ratio". O termo técnico
+  pode aparecer como legenda secundária menor, nunca como título principal.
+- **Resumo ao passar o mouse** em qualquer título de seção/métrica nova,
+  explicando em 1-2 frases o que aquele bloco analisa — antes mesmo de abrir
+  (componente `.tt`/`.tip` já existente em `templates/index.html`; usar a
+  variante `.tip-wide` quando o texto for mais longo que uma frase curta).
+- **Progressive disclosure**: seções recolhidas por padrão (mesmo padrão
+  visual da Central de Alertas — classes `.alert-card`/`.alert-toggle`/
+  `.alert-body`, reaproveitadas em vez de criar um componente novo), pra
+  tela abrir limpa em vez de uma parede de números. Só o resumo mais
+  importante do período fica aberto de cara.
+- **Nunca esconder atrás de um termo sem explicação**: todo número tem, no
+  mínimo, uma legenda curta dizendo o que ele significa (ex.: "kWh pra cada
+  kW instalado" em vez de só "kWh/kWp").
+- **Nome de menu reflete a pergunta que a pessoa está fazendo**, não a
+  origem técnica do dado. Foi por isso que "Qualidade da geração" virou seu
+  próprio menu, "Saúde da usina" — ver "Design do painel".
+
+Esse princípio nasceu da revisão da aba Histórico (mockup iterado e aprovado
+em Artifact — ver "Design do painel"), mas vale pra qualquer tela nova do
+projeto daqui pra frente.
 
 ## Arquitetura
 
@@ -291,6 +323,73 @@ voltam a aparecer como não lidos. Isso é intencional: marcar como lida serve
 pra não ficar repetindo o mesmo aviso na mesma visita, não pra silenciar a
 condição de vez.
 
+### Aba Histórico
+
+Reformulada (mockup iterado e aprovado em Artifact, com o usuário pedindo
+explicitamente títulos legíveis pra qualquer idade — ver "Princípio de
+design"). Cada métrica é uma seção recolhível independente (reaproveita
+`.alert-card`/`.alert-toggle`/`.alert-body` da Central de Alertas, com
+`overflow: visible` numa classe extra `.hist-collapsible` — o card de
+alerta original usa `overflow: hidden`, que cortava o tooltip; ver
+`initHistoricoTab()` em `templates/index.html`):
+
+| Seção | Título exibido | Fonte |
+|---|---|---|
+| Quanto gerou | "☀ Quanto sua usina gerou" | `/api/history` — aberta por padrão |
+| Quanto economizou | "💰 Quanto você economizou" | `/api/history` (mesmo campo `valor_estimado_brl` de sempre, agora com bloco próprio em vez de escondido atrás do toggle Gerado/Economia) |
+| Recordes | "🏆 Seus melhores dias e meses" | `/api/history/records` — melhor dia, melhor mês (`aggregateWindow(every: 1mo)`), maior potência já vista — sempre desde que a usina ligou, independe do período selecionado |
+| Anotações | "📌 Anotações sobre eventos importantes" | `POST`/`GET /api/annotations` — 1 nota por dia (gravar de novo no mesmo dia sobrescreve), measurement `annotation` dedicado |
+
+O seletor de período (Semana/Mês/Ano, no topo da aba) atualiza os 2
+primeiros blocos e a tabela; Recordes e Anotações são sempre all-time.
+`/api/history` também retorna `previous_total_kwh`/`previous_total_brl`
+(mesma duração, período imediatamente anterior) pra mostrar "▲ 12% a mais
+que no período anterior" — quando o período anterior é zero (ex.: antes da
+usina ligar), a comparação não aparece em vez de mostrar um percentual sem
+sentido.
+
+**Relatório em PDF**: botão único no topo da aba (`GET
+/api/history/report.pdf?range=X`), cobre geração + economia do mesmo
+período num só documento — gerado com `reportlab` (`webapp/report_pdf.py`),
+desenhado direto via `canvas` (sem HTML→PDF) pra evitar dependência de
+sistema tipo Cairo/Pango. Layout de página única, sem paginação: gráficos
+de barra mostram só os últimos 60 dias do período e a tabela só os últimos
+10 — pensado como demonstrativo simples, não um extrato completo.
+
+### Menu "Saúde da usina"
+
+Separado do Histórico depois que o usuário notou que "Histórico" estava
+acumulando duas naturezas diferentes de conteúdo: medida pura (quanto
+gerou) vs. diagnóstico (a usina está funcionando direito?). Ver "Princípio
+de design".
+
+| Seção | Título exibido | Fonte |
+|---|---|---|
+| Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` |
+
+`/api/history/inverters` **não precisou de nenhum dado novo do coletor**:
+deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
+`BRAZIL_TZ`, igual ao collector), por inversor — o mesmo princípio que já
+vale pro `daily_generation` (o último valor do dia é o total do dia), só
+que aplicado por inversor em vez do total da usina.
+
+**Ainda não implementado** (aprovado no mockup, mas depende de dado novo da
+Huawei — mexe exatamente na área que já causou o incidente de rate limit
+documentado em "Falhas de coleta e fallback seguro", então vale implementar
+com cautela e medição, não de uma vez):
+
+- **Eficiência da geração** (Performance Ratio, geração real vs. teórica) e
+  **impacto ambiental** (CO₂/carvão/árvores): precisam de
+  `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints nunca chamados
+  pelo coletor até hoje.
+- **Radiação medida vs. geração**: mesma dependência do item acima
+  (`radiation_intensity`).
+- **Comparativo ano a ano**: sem dado real possível ainda de qualquer forma
+  (usina ligou 13/07/2026, não completou 1 ano).
+- **Diagnóstico por string** (tensão por entrada MPPT da FoxESS): precisa
+  de variáveis novas no `device/history/query` da FoxESS
+  (`pv1Volt`/`pv2Volt`), nunca usadas pelo coletor.
+
 ### Linha de média nos gráficos
 
 Os gráficos "Geração diária" (Dashboard e Histórico) mostram uma linha
@@ -313,6 +412,7 @@ eixo X, `interaction.mode: "index"`).
 └── webapp/
     ├── main.py                  # FastAPI: serve o dashboard + endpoints JSON
     ├── celesc_bill_parser.py    # extrai dados da fatura da Celesc (PDF, em memória)
+    ├── report_pdf.py            # monta o relatório de Histórico em PDF (reportlab)
     └── templates/index.html     # dashboard (CSS próprio + Chart.js, dark theme)
 ```
 
@@ -324,7 +424,12 @@ eixo X, `interaction.mode: "index"`).
 | `GET /api/summary` | KPIs atuais: potência, geração/economia do dia, pico do dia + horário, status |
 | `GET /api/inverters` | Potência/geração/temperatura/status (gerando, online sem geração, sem comunicação) por inversor, + `consecutive_failures`/`last_error` da coleta |
 | `GET /api/day-status` | Status do dia: clima, sol, alarme (+ detalhe), geração, bandeira vigente |
-| `GET /api/history?range=semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) |
+| `GET /api/history?range=semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) e `previous_total_kwh`/`previous_total_brl` do período anterior |
+| `GET /api/history/records` | Recordes all-time: melhor dia, melhor mês, maior potência já vista |
+| `GET /api/history/inverters?range=X` | Geração diária por inversor (Huawei/FoxESS), derivada do `inverter_status` já coletado |
+| `GET /api/history/report.pdf?range=X` | Relatório em PDF (geração + economia do período) pra download |
+| `POST /api/annotations` | Grava uma anotação (`date`, `note`) — 1 por dia, sobrescreve se já existir |
+| `GET /api/annotations?range=X` | Lista anotações do período, mais recente primeiro |
 | `GET /api/forecast` | Previsão do tempo 5 dias (Open-Meteo, sem API key) |
 | `POST /api/consumption/upload` | Recebe fatura PDF da Celesc (multipart), extrai e grava no InfluxDB |
 | `GET /api/consumption/summary` | Resumo por UC (última fatura) + economia estimada |
@@ -337,3 +442,6 @@ eixo X, `interaction.mode: "index"`).
 - [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, hoje ilustrativo) contra a doc oficial do SIW300H-3K/SIW200G-5K (ver "Central de alertas")
 - [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura pós-13/07 chegar (ver "Consumo por unidade consumidora")
 - [ ] Enviar a fatura da UC `298240601131` (Elizabeth Rech) todo mês também — hoje só a de Guanabara é gerada com facilidade pelo usuário
+- [ ] Estender "Saúde da usina" com Performance Ratio, real vs. teórico, radiação e impacto ambiental — precisa de `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints novos (ver "Menu Saúde da usina")
+- [ ] Diagnóstico por string (FoxESS `pv1Volt`/`pv2Volt`) — precisa de variáveis novas no `device/history/query` (ver "Menu Saúde da usina")
+- [ ] Comparativo ano a ano — sem dado real possível ainda (usina não completou 1 ano)

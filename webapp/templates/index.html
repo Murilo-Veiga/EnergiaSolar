@@ -98,6 +98,12 @@
 
   /* Central de alertas */
   .alert-card { padding: 0; overflow: hidden; margin-bottom: 14px; }
+  /* Seções recolhíveis da aba Histórico reaproveitam o card de alerta, mas sem
+     overflow:hidden — aqui o título usa tooltip (.tt/.tip), que precisa
+     estourar o card pra cima sem ser cortado. */
+  .hist-collapsible { overflow: visible; }
+  .hist-collapsible .alert-toggle { border-radius: 10px 10px 0 0; }
+  .tt .tip.tip-wide { white-space: normal; width: 280px; text-align: left; line-height: 1.55; }
   .alert-toggle {
     width: 100%; display: flex; align-items: center; justify-content: space-between;
     padding: 16px 20px; background: none; border: none; cursor: pointer; font-family: var(--font-ui); text-align: left;
@@ -224,6 +230,22 @@
     background: var(--accent-blue); border: none; padding: 7px 14px; border-radius: 7px; cursor: pointer;
   }
   .btn-upload:hover { background: #2a78d6; }
+  .btn-upload:disabled { background: var(--surface-2); color: var(--ink-muted); cursor: default; }
+
+  /* Formulário de anotações */
+  .anno-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .anno-form input[type="date"], .anno-form input[type="text"] {
+    font-family: var(--font-ui); font-size: 12.5px; color: var(--ink); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 7px; padding: 8px 11px;
+  }
+  .anno-form input[type="date"] { flex: 0 0 150px; }
+  .anno-form input[type="text"] { flex: 1; min-width: 200px; }
+  .anno-form input:focus { outline: 1px solid var(--accent-blue); }
+  .anno-list { display: flex; flex-direction: column; gap: 10px; }
+  .anno-list-item { display: flex; gap: 12px; font-size: 12.5px; }
+  .anno-list-item .d { color: var(--ink-muted); font-family: var(--font-data); flex-shrink: 0; }
+  .anno-list-item .n { color: var(--ink-2); }
+  .anno-empty { font-size: 12px; color: var(--ink-muted); }
   .uc-stats { display: flex; gap: 28px; margin-bottom: 16px; }
   .uc-stats .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 3px; }
   .uc-stats .v { font-size: 14.5px; font-weight: 600; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
@@ -242,6 +264,7 @@
       <nav class="nav">
         <a class="active" data-tab="dashboard"><span class="ic">▤</span> Dashboard</a>
         <a data-tab="historico"><span class="ic">▲</span> Histórico</a>
+        <a data-tab="saude"><span class="ic">♡</span> Saúde da usina</a>
         <a data-tab="consumo"><span class="ic">▦</span> Consumo</a>
       </nav>
     </aside>
@@ -396,29 +419,97 @@
       </div>
 
       <div id="tab-historico" class="tab-view" hidden>
-        <div class="card chart-card">
-          <div class="chart-head">
-            <div style="display:flex;align-items:center;gap:16px">
-              <h3 id="hist-chart-title">Gerado</h3>
-              <div class="range-toggle" id="hist-metric-toggle">
-                <span class="active" data-metric="gerado">Gerado (kWh)</span>
-                <span data-metric="economia">Economia (R$)</span>
-              </div>
-            </div>
-            <div class="chart-total">
-              <div class="chart-total-label" id="hist-total-label">Total no período</div>
-              <div class="chart-total-value" id="hist-total-value">--</div>
-              <div class="chart-total-avg" id="hist-total-avg"></div>
-            </div>
+        <div class="card" style="padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <p style="margin:0;font-size:12.5px;color:var(--ink-muted);max-width:60ch;line-height:1.6">O que sua usina já registrou: quanto gerou, quanto isso valeu em dinheiro, e seus melhores resultados — sempre no período escolhido ao lado.</p>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <a class="btn-upload" id="hist-pdf-link" href="/api/history/report.pdf?range=mes" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📄 Baixar relatório em PDF</a>
             <div class="range-toggle" id="hist-range-toggle">
               <span data-range="semana">Semana</span><span class="active" data-range="mes">Mês</span><span data-range="ano">Ano</span>
             </div>
           </div>
-          <div class="chart-box" style="height:220px"><canvas id="hist-canvas"></canvas></div>
-          <div class="chart-caption" id="hist-caption"></div>
         </div>
 
-        <div class="card" style="overflow:hidden">
+        <div class="card alert-card hist-collapsible open" id="hist-gerado-card">
+          <button class="alert-toggle" data-target="hist-gerado-body">
+            <div class="alert-head">
+              <span class="tt">
+                <h3>☀ Quanto sua usina gerou</h3>
+                <span class="tip tip-wide">Mostra a energia produzida no período escolhido, dia a dia, e se está gerando mais ou menos do que no período anterior.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="hist-gerado-body">
+            <div style="margin-bottom:14px">
+              <div class="chart-total-value" id="hist-gerado-total" style="text-align:left">--</div>
+              <div class="chart-total-avg" id="hist-gerado-yield" style="text-align:left;color:var(--ink-muted)"></div>
+              <div class="chart-total-avg" id="hist-gerado-delta" style="text-align:left;color:var(--good)"></div>
+            </div>
+            <div class="chart-box" style="height:200px"><canvas id="hist-gerado-canvas"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card alert-card hist-collapsible" id="hist-economia-card">
+          <button class="alert-toggle" data-target="hist-economia-body">
+            <div class="alert-head">
+              <span class="tt">
+                <h3>💰 Quanto você economizou</h3>
+                <span class="tip tip-wide">Estima quanto você deixou de pagar pra Celesc com a energia que a usina gerou, usando a tarifa da sua fatura mais recente.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="hist-economia-body" hidden>
+            <div style="margin-bottom:14px">
+              <div class="chart-total-value" id="hist-economia-total" style="text-align:left">--</div>
+              <div class="chart-total-avg" id="hist-economia-delta" style="text-align:left;color:var(--good)"></div>
+            </div>
+            <div class="chart-box" style="height:200px"><canvas id="hist-economia-canvas"></canvas></div>
+            <div class="chart-caption" style="margin-top:10px">Valor estimado = kWh × tarifa efetiva da fatura mais recente — mesma estimativa da aba Consumo.</div>
+          </div>
+        </div>
+
+        <div class="card alert-card hist-collapsible" id="hist-recordes-card">
+          <button class="alert-toggle" data-target="hist-recordes-body">
+            <div class="alert-head">
+              <span class="tt">
+                <h3>🏆 Seus melhores dias e meses</h3>
+                <span class="tip tip-wide">Guarda os recordes de geração e potência já alcançados, pra você ter um parâmetro de comparação no futuro. Independe do período selecionado acima — é sempre desde que a usina ligou.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="hist-recordes-body" hidden>
+            <div class="day-grid" style="grid-template-columns:repeat(3,1fr)">
+              <div><div class="l">Melhor dia</div><div class="v" id="rec-best-day">--</div></div>
+              <div><div class="l">Melhor mês</div><div class="v" id="rec-best-month">--</div></div>
+              <div><div class="l">Maior potência já vista</div><div class="v" id="rec-peak-power">--</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card alert-card hist-collapsible" id="hist-anotacoes-card">
+          <button class="alert-toggle" data-target="hist-anotacoes-body">
+            <div class="alert-head">
+              <span class="tt">
+                <h3>📌 Anotações sobre eventos importantes</h3>
+                <span class="tip tip-wide">Espaço pra você anotar algo que aconteceu num dia específico (uma limpeza, um reparo) e ajuda a explicar um salto no gráfico depois.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="hist-anotacoes-body" hidden>
+            <form class="anno-form" id="anno-form">
+              <input type="date" id="anno-date" required>
+              <input type="text" id="anno-text" placeholder="Ex.: limpeza dos painéis" maxlength="280" required>
+              <button type="submit" class="btn-upload" id="anno-submit">Salvar</button>
+            </form>
+            <div class="anno-list" id="anno-list"></div>
+            <div class="anno-empty" id="anno-empty" hidden>Nenhuma anotação nesse período ainda.</div>
+          </div>
+        </div>
+
+        <div class="card" style="overflow:hidden;margin-top:14px">
           <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
             <h3 style="margin:0;font-size:13px;font-weight:600;color:var(--ink-2)">Histórico recente</h3>
           </div>
@@ -427,6 +518,41 @@
             <tbody id="hist-table-body"></tbody>
           </table>
           <div style="padding:10px 20px;font-size:11px;color:var(--ink-muted)">Valor estimado = kWh × tarifa efetiva da fatura mais recente — mesma estimativa da aba Consumo.</div>
+        </div>
+      </div>
+
+      <div id="tab-saude" class="tab-view" hidden>
+        <div class="card" style="padding:16px 20px;margin-bottom:14px">
+          <p style="margin:0;font-size:12.5px;color:var(--ink-muted);max-width:78ch;line-height:1.6">
+            Isto <b style="color:var(--ink-2)">não é sobre quanto gerou</b> — é sobre se a usina está gerando
+            o que deveria, pra pegar um problema (sombra, sujeira, um inversor rendendo menos) cedo, antes que
+            vire meses de perda.
+          </p>
+        </div>
+
+        <div class="card alert-card hist-collapsible open" id="saude-inversores-card">
+          <button class="alert-toggle" data-target="saude-inversores-body">
+            <div class="alert-head">
+              <span class="tt">
+                <h3>🔀 Quanto cada inversor contribuiu</h3>
+                <span class="tip tip-wide">Compara a geração da Huawei com a da FoxESS ao longo do tempo, pra notar se um lado da usina está rendendo menos que o outro.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="saude-inversores-body">
+            <div class="chart-box" style="height:200px"><canvas id="saude-inversores-canvas"></canvas></div>
+            <div class="chart-legend" style="margin-top:12px">
+              <div class="item"><span class="sw" style="background:#3987e5;width:10px;height:10px;border-radius:2px;display:inline-block"></span>Huawei (3 kW)</div>
+              <div class="item"><span class="sw" style="background:#199e70;width:10px;height:10px;border-radius:2px;display:inline-block"></span>FoxESS (5 kW)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:16px 20px;margin-top:14px;font-size:12px;color:var(--ink-muted);line-height:1.6">
+          Outras análises de saúde da usina (eficiência vs. sol do dia, radiação medida, impacto ambiental)
+          dependem de dados novos da API da Huawei e ainda não foram implementadas — ver "Aba Histórico" no
+          README para o motivo.
         </div>
       </div>
 
@@ -648,6 +774,195 @@
 
       loadRange();
       return { refresh: loadRange };
+    }
+
+    // ---------- Aba Histórico: cada bloco (gerado/economia/recordes) é uma seção
+    // recolhível independente, mesmo padrão visual da Central de Alertas — só o
+    // resumo do período fica aberto por padrão. Ver README > "Design do painel".
+    const histCharts = {};
+
+    function deltaLabel(current, previous) {
+      if (!previous) return "";
+      const pct = Math.round(((current - previous) / previous) * 100);
+      if (pct === 0) return "≈ igual ao período anterior";
+      const arrow = pct > 0 ? "▲" : "▼";
+      return `${arrow} ${Math.abs(pct)}% ${pct > 0 ? "a mais" : "a menos"} que no período anterior`;
+    }
+
+    function renderHistBarChart(canvasId, labels, values, color) {
+      if (histCharts[canvasId]) histCharts[canvasId].destroy();
+      histCharts[canvasId] = new Chart(document.getElementById(canvasId), {
+        type: "bar",
+        data: { labels, datasets: [{ data: values, backgroundColor: color, borderRadius: 4, borderSkipped: false, maxBarThickness: 26 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: chartTooltipStyle() },
+          scales: {
+            x: { ticks: { color: "#898781", font: CHART_FONT }, grid: { display: false } },
+            y: { ticks: { color: "#898781", font: CHART_FONT }, grid: { color: "#2c2c2a" }, beginAtZero: true },
+          },
+        },
+      });
+    }
+
+    async function loadHistorico(range) {
+      const [data, summ] = await Promise.all([
+        fetch(`/api/history?range=${range}`).then(r => r.json()),
+        fetch("/api/summary").then(r => r.json()),
+      ]);
+      const labels = data.rows.map(row => row.date.slice(5));
+
+      document.getElementById("hist-gerado-total").innerHTML = `${fmtNum(data.total_kwh)}<span class="unit"> kWh</span>`;
+      document.getElementById("hist-gerado-delta").textContent = deltaLabel(data.total_kwh, data.previous_total_kwh);
+      if (summ.installed_power_kwp) {
+        const yieldKwhKwp = data.total_kwh / summ.installed_power_kwp;
+        document.getElementById("hist-gerado-yield").textContent = `${fmtNum(yieldKwhKwp)} kWh pra cada kW instalado`;
+      }
+      renderHistBarChart("hist-gerado-canvas", labels, data.rows.map(r => r.generated_kwh), "#3987e5");
+
+      document.getElementById("hist-economia-total").textContent = fmtBRL(data.total_brl);
+      document.getElementById("hist-economia-delta").textContent = deltaLabel(data.total_brl, data.previous_total_brl);
+      renderHistBarChart("hist-economia-canvas", labels, data.rows.map(r => r.valor_estimado_brl), "#199e70");
+
+      const tbody = document.getElementById("hist-table-body");
+      tbody.innerHTML = "";
+      [...data.rows].reverse().forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="date">${row.date}</td>
+          <td class="num">${fmtNum(row.generated_kwh)} kWh</td>
+          <td class="num" style="color:var(--ink-2)">${row.valor_estimado_brl !== null ? fmtBRL(row.valor_estimado_brl) : "--"}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadHistRecordes() {
+      const r = await fetch("/api/history/records");
+      const d = await r.json();
+      document.getElementById("rec-best-day").textContent = d.best_day_kwh !== null
+        ? `${fmtNum(d.best_day_kwh)} kWh · ${d.best_day_date}` : "--";
+      document.getElementById("rec-best-month").textContent = d.best_month_kwh !== null
+        ? `${fmtNum(d.best_month_kwh)} kWh · ${d.best_month_label}` : "--";
+      if (d.peak_power_kw !== null && d.peak_power_at) {
+        const at = new Date(d.peak_power_at);
+        document.getElementById("rec-peak-power").textContent =
+          `${fmtNum(d.peak_power_kw, 2)} kW · ${at.toLocaleDateString("pt-BR")}`;
+      } else {
+        document.getElementById("rec-peak-power").textContent = "--";
+      }
+    }
+
+    // Seções recolhíveis reaproveitam o padrão da Central de Alertas em
+    // qualquer aba — cada botão com data-target controla seu próprio corpo.
+    function wireCollapsibles(containerSelector) {
+      document.querySelectorAll(`${containerSelector} .alert-toggle[data-target]`).forEach(btn => {
+        btn.addEventListener("click", () => {
+          const body = document.getElementById(btn.dataset.target);
+          const card = btn.closest(".alert-card");
+          const willOpen = body.hidden;
+          body.hidden = !willOpen;
+          card.classList.toggle("open", willOpen);
+        });
+      });
+    }
+
+    async function loadAnotacoes() {
+      const r = await fetch("/api/annotations?range=ano");
+      const d = await r.json();
+      const list = document.getElementById("anno-list");
+      const empty = document.getElementById("anno-empty");
+      if (d.rows.length === 0) {
+        list.innerHTML = "";
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+      list.innerHTML = d.rows.map(row => `
+        <div class="anno-list-item">
+          <span class="d">${row.date}</span>
+          <span class="n">${row.note.replace(/</g, "&lt;")}</span>
+        </div>
+      `).join("");
+    }
+
+    function initHistoricoTab() {
+      let range = "mes";
+      loadHistorico(range);
+      loadHistRecordes();
+      loadAnotacoes();
+
+      document.getElementById("hist-range-toggle").addEventListener("click", (e) => {
+        const span = e.target.closest("span[data-range]");
+        if (!span) return;
+        e.currentTarget.querySelectorAll("span").forEach(s => s.classList.remove("active"));
+        span.classList.add("active");
+        range = span.dataset.range;
+        document.getElementById("hist-pdf-link").href = `/api/history/report.pdf?range=${range}`;
+        loadHistorico(range);
+      });
+
+      document.getElementById("anno-date").valueAsDate = new Date();
+      document.getElementById("anno-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const dateEl = document.getElementById("anno-date");
+        const textEl = document.getElementById("anno-text");
+        const submitBtn = document.getElementById("anno-submit");
+        if (!dateEl.value || !textEl.value.trim()) return;
+        submitBtn.disabled = true;
+        try {
+          await fetch("/api/annotations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: dateEl.value, note: textEl.value.trim() }),
+          });
+          textEl.value = "";
+          await loadAnotacoes();
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      wireCollapsibles("#tab-historico");
+    }
+
+    // ---------- Aba Saúde da usina ----------
+    const saudeCharts = {};
+
+    async function loadSaudeTab() {
+      const r = await fetch("/api/history/inverters?range=mes");
+      const d = await r.json();
+      const labels = d.rows.map(row => row.date.slice(5));
+
+      if (saudeCharts.inversores) saudeCharts.inversores.destroy();
+      saudeCharts.inversores = new Chart(document.getElementById("saude-inversores-canvas"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Huawei", data: d.rows.map(row => row.huawei_kwh), backgroundColor: "#3987e5", borderRadius: 4, borderSkipped: false, maxBarThickness: 26, stack: "s" },
+            { label: "FoxESS", data: d.rows.map(row => row.foxess_kwh), backgroundColor: "#199e70", borderRadius: 4, borderSkipped: false, maxBarThickness: 26, stack: "s" },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { ...chartTooltipStyle(), displayColors: true, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtNum(ctx.parsed.y)} kWh` } } },
+          scales: {
+            x: { stacked: true, ticks: { color: "#898781", font: CHART_FONT }, grid: { display: false } },
+            y: { stacked: true, ticks: { color: "#898781", font: CHART_FONT }, grid: { color: "#2c2c2a" }, beginAtZero: true },
+          },
+        },
+      });
+    }
+
+    let saudeInited = false;
+    function initSaudeTab() {
+      if (saudeInited) return;
+      saudeInited = true;
+      loadSaudeTab();
+      wireCollapsibles("#tab-saude");
     }
 
     // ---------- Dashboard ----------
@@ -1018,7 +1333,7 @@
     }
 
     // ---------- Navegação ----------
-    const PAGE_TITLES = { dashboard: "Dashboard", historico: "Histórico", consumo: "Consumo" };
+    const PAGE_TITLES = { dashboard: "Dashboard", historico: "Histórico", saude: "Saúde da usina", consumo: "Consumo" };
 
     function showView(name) {
       document.querySelectorAll(".tab-view").forEach(v => v.hidden = true);
@@ -1026,6 +1341,7 @@
       document.getElementById("page-title").textContent = PAGE_TITLES[name] ?? name;
       document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.dataset.tab === name));
       if (name === "consumo") refreshConsumptionTab();
+      if (name === "saude") initSaudeTab();
     }
 
     document.querySelectorAll(".nav a").forEach(a => {
@@ -1033,7 +1349,7 @@
     });
 
     initGeracaoChart("dash", "dash-canvas");
-    initGeracaoChart("hist", "hist-canvas", { tableBodyId: "hist-table-body" });
+    initHistoricoTab();
 
     refreshSummary();
     refreshInverters();
