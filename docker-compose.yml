@@ -1,0 +1,54 @@
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: solar-home-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  collector:
+    build: ./collector
+    container_name: solar-home-collector
+    restart: unless-stopped
+    environment:
+      HUAWEI_USERNAME: ${HUAWEI_USERNAME}
+      HUAWEI_SYSTEM_CODE: ${HUAWEI_SYSTEM_CODE}
+      HUAWEI_BASE_URL: ${HUAWEI_BASE_URL:-https://la5.fusionsolar.huawei.com}
+      FOXESS_API_KEY: ${FOXESS_API_KEY}
+      FOXESS_BASE_URL: ${FOXESS_BASE_URL:-https://www.foxesscloud.com}
+      PLANT_INSTALLED_POWER_KWP: ${PLANT_INSTALLED_POWER_KWP:-12.2}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
+      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-300}
+    depends_on:
+      - influxdb
+
+  webapp:
+    build: ./webapp
+    container_name: solar-home-webapp
+    restart: unless-stopped
+    ports:
+      - "8080:8000"
+    environment:
+      PLANT_LAT: ${PLANT_LAT}
+      PLANT_LON: ${PLANT_LON}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
+    depends_on:
+      - influxdb
+
+volumes:
+  influxdb-data:

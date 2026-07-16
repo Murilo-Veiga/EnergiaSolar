@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Home</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --surface-2: #212120;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --ink-muted: #898781;
+    --line:      #2c2c2a;
+    --border:    rgba(255,255,255,0.10);
+    --accent-blue:  #3987e5;
+    --accent-aqua:  #199e70;
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --critical: #d03b3b;
+    --font-ui:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-data: ui-monospace, "SF Mono", "IBM Plex Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { display: flex; height: 100%; }
+  .sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 22px 16px; }
+  .brand { padding: 0 6px 20px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  .brand .name { font-size: 15px; font-weight: 700; color: var(--accent-blue); letter-spacing: -0.01em; }
+  .brand .sub { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+  .nav a {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px;
+    font-size: 13.5px; color: var(--ink-muted); text-decoration: none; margin-bottom: 2px; font-weight: 500; cursor: pointer;
+  }
+  .nav a.active { background: rgba(57,135,229,0.14); color: var(--accent-blue); font-weight: 600; }
+  .nav a .ic { width: 16px; text-align: center; opacity: .85; }
+
+  .main { flex: 1; overflow-y: auto; padding: 28px 32px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .topbar h2 { font-size: 20px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  .updated { font-size: 12.5px; color: var(--ink-muted); display: flex; align-items: center; gap: 6px; }
+  .updated .sw { width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+
+  /* Hero row */
+  .hero-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .hero-card { padding: 20px 22px; }
+  .hero-card .l { font-size: 12px; color: var(--ink-muted); font-weight: 500; }
+  .hero-card .v-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
+  .hero-card .v { font-size: 42px; font-weight: 650; font-family: var(--font-data); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .hero-card .unit { font-size: 15px; color: var(--ink-muted); font-weight: 500; }
+  .hero-card .foot { font-size: 12px; color: var(--ink-muted); margin-top: 10px; min-height: 15px; }
+  .hero-card .foot .up { color: var(--good); font-weight: 600; }
+
+  .stat-card { padding: 18px 20px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+  .stat-card .l { font-size: 12px; color: var(--ink-muted); font-weight: 500; }
+  .stat-card .v { font-size: 27px; font-weight: 650; font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .stat-card .v .unit { font-size: 13px; color: var(--ink-muted); font-weight: 500; }
+  .sub { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; min-height: 17px; }
+  .sub .tag {
+    font-family: var(--font-ui); font-size: 9px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-muted); background: var(--surface-2); border: 1px solid var(--border);
+    padding: 1.5px 5px; border-radius: 4px; font-weight: 600;
+  }
+
+  /* Inverter row */
+  .inv-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .inv-card { padding: 14px 18px 16px; }
+  .inv-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .inv-id { display: flex; align-items: center; gap: 10px; }
+  .inv-id .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .inv-id .name { font-size: 13px; font-weight: 600; }
+  .inv-body { display: flex; align-items: flex-end; justify-content: space-between; }
+  .inv-id .model { font-size: 11.5px; color: var(--ink-muted); }
+  .inv-id .temp { font-size: 10.5px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; margin-top: 3px; }
+  .inv-vals { text-align: right; }
+  .inv-vals .p { font-family: var(--font-data); font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .inv-vals .p .unit { font-size: 11px; color: var(--ink-muted); }
+  .inv-vals .k { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+  .inv-status { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 650; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .inv-status i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .inv-status.st-good { color: var(--good); background: rgba(12,163,12,0.12); }
+  .inv-status.st-good i { background: var(--good); }
+  .inv-status.st-idle { color: var(--ink-muted); background: var(--surface-2); }
+  .inv-status.st-idle i { background: var(--ink-muted); }
+  .inv-status.st-critical { color: var(--critical); background: rgba(208,59,59,0.16); }
+  .inv-status.st-critical i { background: var(--critical); }
+
+  /* Tooltip */
+  .tt { position: relative; display: inline-flex; cursor: help; }
+  .tt .tip {
+    position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%) translateY(3px);
+    background: #050505; color: var(--ink-2); font-size: 11px; font-weight: 500; line-height: 1.5;
+    padding: 8px 11px; border-radius: 7px; border: 1px solid var(--border);
+    white-space: nowrap; opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease, visibility .15s;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45); z-index: 20;
+  }
+  .tt .tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #050505;
+  }
+  .tt:hover .tip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+
+  /* Chart card */
+  .chart-card { padding: 20px 22px; margin-bottom: 14px; }
+  .chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; row-gap: 12px; }
+  .chart-head h3 { font-size: 13.5px; font-weight: 600; margin: 0; color: var(--ink); }
+  .chart-total { text-align: center; }
+  .chart-total-label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; font-weight: 600; }
+  .chart-total-value { font-size: 22px; font-weight: 700; font-family: var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); letter-spacing: -0.01em; }
+  .chart-total-value .unit { font-size: 12.5px; color: var(--ink-muted); font-weight: 500; }
+  .range-toggle { display: flex; gap: 2px; background: var(--surface-2); border-radius: 7px; padding: 3px; }
+  .range-toggle span { font-size: 11.5px; padding: 5px 11px; border-radius: 5px; color: var(--ink-muted); font-weight: 500; cursor: pointer; user-select: none; }
+  .range-toggle span:hover:not(.active) { color: var(--ink-2); }
+  .range-toggle span.active { background: var(--accent-blue); color: #fff; }
+  .chart-caption { margin-top: 8px; font-size: 11px; color: var(--ink-muted); }
+  .chart-box { position: relative; }
+
+  .flag-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; flex-shrink: 0; }
+  .flag-dot.amarela { background: var(--warning); }
+  .flag-dot.verde { background: var(--good); }
+  .flag-dot.vermelha { background: var(--critical); }
+
+  .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; }
+  .status-pill .sw { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+
+  /* Bottom row */
+  .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .day-card { padding: 18px 20px; }
+  .day-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .day-card h3 { font-size: 13px; font-weight: 600; margin: 0; color: var(--ink-2); }
+  .day-card .date { font-size: 12px; color: var(--ink-muted); }
+  .day-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 14px; }
+  .day-grid .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 4px; }
+  .day-grid .v { font-size: 15px; font-weight: 600; font-family: var(--font-data); }
+  .day-extra { display: flex; gap: 26px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .day-extra-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
+  .day-extra-item .l { color: var(--ink-muted); }
+  .day-extra-item .v { color: var(--ink-2); font-weight: 600; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .day-extra-item[hidden] { display: none; }
+
+  .forecast-card { padding: 18px 20px; }
+  .forecast-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 14px; color: var(--ink-2); }
+  .fc-strip { display: flex; gap: 8px; align-items: stretch; }
+  .fc-day { flex: 1; text-align: center; background: var(--surface-2); border-radius: 8px; padding: 12px 8px 10px; display: flex; flex-direction: column; }
+  .fc-day .d { font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
+  .fc-day .ic { font-size: 18px; margin: 6px 0 4px; }
+  .fc-day .cond { font-size: 10px; color: var(--ink-2); line-height: 1.25; min-height: 25px; padding: 0 2px; }
+  .fc-day .fc-stats { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; display: flex; flex-direction: column; gap: 4px; }
+  .fc-day .rad { font-size: 10px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .fc-day .rad .unit { font-size: 8px; color: var(--ink-muted); }
+  .fc-day .rad-meter { height: 3px; background: var(--surface); border-radius: 2px; overflow: hidden; margin: 3px 1px 0; }
+  .fc-day .rad-meter i { display: block; height: 100%; background: var(--ink-muted); border-radius: 2px; }
+  .fc-day .t { font-size: 12px; color: var(--ink-2); font-weight: 650; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+  /* Histórico table */
+  .hist-table { width: 100%; border-collapse: collapse; }
+  .hist-table th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-muted); font-weight: 600; padding: 12px 20px; border-bottom: 1px solid var(--border);
+  }
+  .hist-table td { padding: 11px 20px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .hist-table tr:last-child td { border-bottom: none; }
+  .hist-table td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+  .hist-table td.date { color: var(--ink-2); }
+
+  /* Consumo tab */
+  .uc-card { padding: 20px; }
+  .uc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .uc-id { display: flex; align-items: center; gap: 10px; }
+  .uc-id .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 1px; }
+  .uc-id .name { font-size: 13.5px; font-weight: 600; }
+  .uc-id .code { font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); }
+  .btn-upload {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--accent-blue); border: none; padding: 7px 14px; border-radius: 7px; cursor: pointer;
+  }
+  .btn-upload:hover { background: #2a78d6; }
+  .uc-stats { display: flex; gap: 28px; margin-bottom: 16px; }
+  .uc-stats .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 3px; }
+  .uc-stats .v { font-size: 14.5px; font-weight: 600; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .upload-status { font-size: 11px; color: var(--ink-muted); margin-bottom: 12px; min-height: 14px; }
+
+  .tab-view[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="name">☀ Solar Home</div>
+        <div class="sub">Painel de Monitoramento</div>
+      </div>
+      <nav class="nav">
+        <a class="active" data-tab="dashboard"><span class="ic">▤</span> Dashboard</a>
+        <a data-tab="historico"><span class="ic">▲</span> Histórico</a>
+        <a data-tab="consumo"><span class="ic">▦</span> Consumo</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <h2 id="page-title">Dashboard</h2>
+        <div class="updated"><span class="sw"></span> Atualizado às <span id="updated-at">--:--:--</span></div>
+      </div>
+
+      <div id="tab-dashboard" class="tab-view">
+        <div class="hero-row">
+          <div class="card hero-card">
+            <div class="l">Potência instantânea</div>
+            <div class="v-row"><span id="kpi-power" class="v">--</span><span class="unit">kW</span></div>
+            <div class="foot" id="kpi-peak"></div>
+          </div>
+          <div class="card stat-card">
+            <div class="l">Gerado hoje</div>
+            <div class="v"><span id="kpi-today">--</span><span class="unit"> kWh</span></div>
+            <div class="sub" id="kpi-today-eco" hidden></div>
+          </div>
+          <div class="card stat-card">
+            <div class="l">Potência instalada</div>
+            <div class="v"><span id="kpi-installed">--</span><span class="unit"> kWp</span></div>
+          </div>
+        </div>
+
+        <div class="inv-row">
+          <div class="card inv-card">
+            <div class="inv-top">
+              <div class="inv-id">
+                <span class="dot" style="background:var(--accent-blue)"></span>
+                <span class="name">Huawei</span>
+              </div>
+              <span class="tt">
+                <span id="inv-huawei-status" class="inv-status st-idle"><i></i>--</span>
+                <span id="inv-huawei-tip" class="tip"></span>
+              </span>
+            </div>
+            <div class="inv-body">
+              <div>
+                <div class="model">SIW300H-3K</div>
+                <div class="temp" id="inv-huawei-temp">--</div>
+              </div>
+              <div class="inv-vals">
+                <div class="p"><span id="inv-huawei-power">--</span> <span class="unit">kW</span></div>
+                <div class="k"><span id="inv-huawei-day">--</span> kWh hoje</div>
+              </div>
+            </div>
+          </div>
+          <div class="card inv-card">
+            <div class="inv-top">
+              <div class="inv-id">
+                <span class="dot" style="background:var(--accent-aqua)"></span>
+                <span class="name">FoxESS</span>
+              </div>
+              <span class="tt">
+                <span id="inv-foxess-status" class="inv-status st-idle"><i></i>--</span>
+                <span id="inv-foxess-tip" class="tip"></span>
+              </span>
+            </div>
+            <div class="inv-body">
+              <div>
+                <div class="model">SIW200G-5K</div>
+                <div class="temp" id="inv-foxess-temp">--</div>
+              </div>
+              <div class="inv-vals">
+                <div class="p"><span id="inv-foxess-power">--</span> <span class="unit">kW</span></div>
+                <div class="k"><span id="inv-foxess-day">--</span> kWh hoje</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-head">
+            <div style="display:flex;align-items:center;gap:16px">
+              <h3 id="dash-chart-title">Gerado</h3>
+              <div class="range-toggle" id="dash-metric-toggle">
+                <span class="active" data-metric="gerado">Gerado (kWh)</span>
+                <span data-metric="economia">Economia (R$)</span>
+              </div>
+            </div>
+            <div class="chart-total">
+              <div class="chart-total-label" id="dash-total-label">Total no período</div>
+              <div class="chart-total-value" id="dash-total-value">--</div>
+            </div>
+            <div class="range-toggle" id="dash-range-toggle">
+              <span data-range="semana">Semana</span><span class="active" data-range="mes">Mês</span><span data-range="ano">Ano</span>
+            </div>
+          </div>
+          <div class="chart-box" style="height:180px"><canvas id="dash-canvas"></canvas></div>
+          <div class="chart-caption" id="dash-caption"></div>
+        </div>
+
+        <div class="bottom-row">
+          <div class="card day-card">
+            <div class="head">
+              <h3>Status do dia</h3>
+              <span class="date" id="day-status-date">--</span>
+            </div>
+            <div class="day-grid">
+              <div>
+                <div class="l">Clima</div>
+                <div class="v" id="day-status-weather" style="font-family:var(--font-ui)">--</div>
+              </div>
+              <div>
+                <div class="l">Situação</div>
+                <span class="status-pill" id="day-status-pill"><span class="sw"></span><span class="label">--</span></span>
+                <div id="day-status-alarm-detail" style="font-size:10.5px;color:var(--ink-muted);margin-top:4px"></div>
+              </div>
+              <div>
+                <div class="l">Gerado</div>
+                <div class="v" id="day-status-generated">--</div>
+              </div>
+            </div>
+            <div class="day-extra">
+              <div class="day-extra-item tt" id="day-bandeira" hidden>
+                <span class="flag-dot" id="day-bandeira-dot"></span>
+                <span class="l">Bandeira</span> <span class="v" id="day-bandeira-name">--</span>
+                <span class="tip" id="day-bandeira-tip"></span>
+              </div>
+              <div class="day-extra-item">
+                <span class="l">Sol</span> <span class="v" id="day-sun">--</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card forecast-card">
+            <h3>Previsão (5 dias)</h3>
+            <div class="fc-strip" id="forecast-cards"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-historico" class="tab-view" hidden>
+        <div class="card chart-card">
+          <div class="chart-head">
+            <div style="display:flex;align-items:center;gap:16px">
+              <h3 id="hist-chart-title">Gerado</h3>
+              <div class="range-toggle" id="hist-metric-toggle">
+                <span class="active" data-metric="gerado">Gerado (kWh)</span>
+                <span data-metric="economia">Economia (R$)</span>
+              </div>
+            </div>
+            <div class="chart-total">
+              <div class="chart-total-label" id="hist-total-label">Total no período</div>
+              <div class="chart-total-value" id="hist-total-value">--</div>
+            </div>
+            <div class="range-toggle" id="hist-range-toggle">
+              <span data-range="semana">Semana</span><span class="active" data-range="mes">Mês</span><span data-range="ano">Ano</span>
+            </div>
+          </div>
+          <div class="chart-box" style="height:220px"><canvas id="hist-canvas"></canvas></div>
+          <div class="chart-caption" id="hist-caption"></div>
+        </div>
+
+        <div class="card" style="overflow:hidden">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+            <h3 style="margin:0;font-size:13px;font-weight:600;color:var(--ink-2)">Histórico recente</h3>
+          </div>
+          <table class="hist-table">
+            <thead><tr><th>Data</th><th>Gerado</th><th>Valor estimado</th></tr></thead>
+            <tbody id="hist-table-body"></tbody>
+          </table>
+          <div style="padding:10px 20px;font-size:11px;color:var(--ink-muted)">Valor estimado = kWh × tarifa efetiva da fatura mais recente — mesma estimativa da aba Consumo.</div>
+        </div>
+      </div>
+
+      <div id="tab-consumo" class="tab-view" hidden>
+        <div class="hero-row" style="grid-template-columns: 1fr 2fr;">
+          <div class="card hero-card">
+            <div class="l">Economia acumulada</div>
+            <div class="v-row"><span id="consumo-economia" class="v" style="font-size:32px">--</span></div>
+            <div class="foot"><span class="tag" style="font-family:var(--font-ui);font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted);background:var(--surface-2);border:1px solid var(--border);padding:1.5px 5px;border-radius:4px;font-weight:600;">estimativa</span></div>
+          </div>
+          <div class="card" style="padding:18px 22px;display:flex;align-items:center">
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.7;margin:0">
+              Geração acumulada desde que a usina ligou × tarifa efetiva (valor pago ÷ kWh) da fatura mais
+              recente. Nenhuma fatura até agora cobre um período com compensação solar — quando a Celesc
+              trouxer o crédito oficial, o painel passa a mostrar esse valor no lugar da estimativa.
+            </p>
+          </div>
+        </div>
+
+        <div class="inv-row" style="align-items: stretch;">
+          <div class="card uc-card">
+            <div class="uc-head">
+              <div class="uc-id">
+                <span class="dot" style="background:var(--accent-blue)"></span>
+                <div>
+                  <div class="name">Guanabara (usina)</div>
+                  <div class="code">UC 19647901154</div>
+                </div>
+              </div>
+              <label class="btn-upload">
+                Enviar fatura (PDF)
+                <input type="file" accept="application/pdf" style="display:none" onchange="uploadConsumption('19647901154', this)">
+              </label>
+            </div>
+            <div class="upload-status" id="consumo-upload-status-19647901154"></div>
+            <div class="uc-stats">
+              <div><div class="l">Última fatura</div><div class="v" id="consumo-19647901154-referencia">--</div></div>
+              <div><div class="l">Consumo / Valor</div><div class="v" id="consumo-19647901154-valores">--</div></div>
+            </div>
+            <div class="chart-box" style="height:90px"><canvas id="consumo-chart-19647901154"></canvas></div>
+          </div>
+
+          <div class="card uc-card">
+            <div class="uc-head">
+              <div class="uc-id">
+                <span class="dot" style="background:var(--accent-aqua)"></span>
+                <div>
+                  <div class="name">Elizabeth Rech</div>
+                  <div class="code">UC 298240601131</div>
+                </div>
+              </div>
+              <label class="btn-upload">
+                Enviar fatura (PDF)
+                <input type="file" accept="application/pdf" style="display:none" onchange="uploadConsumption('298240601131', this)">
+              </label>
+            </div>
+            <div class="upload-status" id="consumo-upload-status-298240601131"></div>
+            <div class="uc-stats">
+              <div><div class="l">Última fatura</div><div class="v" id="consumo-298240601131-referencia">--</div></div>
+              <div><div class="l">Consumo / Valor</div><div class="v" id="consumo-298240601131-valores">--</div></div>
+            </div>
+            <div class="chart-box" style="height:90px"><canvas id="consumo-chart-298240601131"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const fmtNum = (v, digits = 1) => (v === null || v === undefined) ? "--" : Number(v).toFixed(digits);
+    const fmtBRL = (v) => (v === null || v === undefined) ? "--" : `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
+
+    const CHART_FONT = { family: "var(--font-data)", size: 10.5 };
+    function chartTooltipStyle() {
+      return {
+        backgroundColor: "#050505",
+        borderColor: "rgba(255,255,255,0.10)",
+        borderWidth: 1,
+        padding: 10,
+        titleColor: "#c3c2b7",
+        titleFont: { family: "var(--font-ui)", size: 11, weight: "600" },
+        bodyColor: "#ffffff",
+        bodyFont: { family: "var(--font-data)", size: 12 },
+        cornerRadius: 7,
+        displayColors: false,
+      };
+    }
+
+    // ---------- Componente reutilizável do gráfico Gerado/Economia ----------
+    const RANGE_LABEL = { semana: "semana (7 dias)", mes: "mês (30 dias)", ano: "ano (12 meses)" };
+    const geracaoCharts = {};
+
+    function initGeracaoChart(prefix, canvasId, opts = {}) {
+      const state = { metric: "gerado", range: "mes", data: null };
+
+      async function loadRange() {
+        const r = await fetch(`/api/history?range=${state.range}`);
+        state.data = await r.json();
+        render();
+      }
+
+      function render() {
+        if (!state.data) return;
+        const isEconomia = state.metric === "economia";
+        const rows = state.data.rows;
+        const labels = rows.map(row => row.date.slice(5));
+        const values = rows.map(row => isEconomia ? row.valor_estimado_brl : row.generated_kwh);
+        const color = isEconomia ? "#199e70" : "#3987e5";
+
+        document.getElementById(`${prefix}-chart-title`).textContent = isEconomia ? "Economia" : "Gerado";
+
+        const total = isEconomia ? state.data.total_brl : state.data.total_kwh;
+        const totalValueEl = document.getElementById(`${prefix}-total-value`);
+        totalValueEl.innerHTML = isEconomia
+          ? fmtBRL(total)
+          : `${fmtNum(total)}<span class="unit"> kWh</span>`;
+        document.getElementById(`${prefix}-total-label`).textContent =
+          `Total ${isEconomia ? "economizado" : "gerado"} — ${RANGE_LABEL[state.range]}`;
+
+        const captionEl = document.getElementById(`${prefix}-caption`);
+        if (captionEl) captionEl.textContent = "";
+
+        if (geracaoCharts[prefix]) geracaoCharts[prefix].destroy();
+        geracaoCharts[prefix] = new Chart(document.getElementById(canvasId), {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              backgroundColor: color,
+              borderRadius: 4,
+              borderSkipped: false,
+              maxBarThickness: 26,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                ...chartTooltipStyle(),
+                callbacks: {
+                  label: (ctx) => isEconomia ? fmtBRL(ctx.parsed.y) : `${fmtNum(ctx.parsed.y)} kWh`,
+                },
+              },
+            },
+            scales: {
+              x: { ticks: { color: "#898781", font: CHART_FONT }, grid: { display: false } },
+              y: { ticks: { color: "#898781", font: CHART_FONT }, grid: { color: "#2c2c2a" }, beginAtZero: true },
+            },
+          },
+        });
+
+        if (opts.tableBodyId) {
+          const tbody = document.getElementById(opts.tableBodyId);
+          tbody.innerHTML = "";
+          [...rows].reverse().forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td class="date">${row.date}</td>
+              <td class="num">${fmtNum(row.generated_kwh)} kWh</td>
+              <td class="num" style="color:var(--ink-2)">${row.valor_estimado_brl !== null ? fmtBRL(row.valor_estimado_brl) : "--"}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      }
+
+      document.getElementById(`${prefix}-metric-toggle`).addEventListener("click", (e) => {
+        const span = e.target.closest("span[data-metric]");
+        if (!span) return;
+        e.currentTarget.querySelectorAll("span").forEach(s => s.classList.remove("active"));
+        span.classList.add("active");
+        state.metric = span.dataset.metric;
+        render();
+      });
+
+      document.getElementById(`${prefix}-range-toggle`).addEventListener("click", (e) => {
+        const span = e.target.closest("span[data-range]");
+        if (!span) return;
+        e.currentTarget.querySelectorAll("span").forEach(s => s.classList.remove("active"));
+        span.classList.add("active");
+        state.range = span.dataset.range;
+        loadRange();
+      });
+
+      loadRange();
+      return { refresh: loadRange };
+    }
+
+    // ---------- Dashboard ----------
+    async function refreshSummary() {
+      const r = await fetch("/api/summary");
+      const d = await r.json();
+
+      document.getElementById("kpi-power").textContent = fmtNum(d.instantaneous_power_kw, 2);
+      document.getElementById("kpi-today").textContent = fmtNum(d.today_generated_kwh);
+      document.getElementById("kpi-installed").textContent = fmtNum(d.installed_power_kwp);
+
+      const peakEl = document.getElementById("kpi-peak");
+      if (d.peak_power_kw !== null && d.peak_power_at) {
+        const at = new Date(d.peak_power_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+        peakEl.innerHTML = `Pico hoje <span class="up">${fmtNum(d.peak_power_kw, 2)} kW</span> às ${at}`;
+      } else {
+        peakEl.textContent = "";
+      }
+
+      const ecoEl = document.getElementById("kpi-today-eco");
+      if (d.today_economia_brl !== null) {
+        ecoEl.hidden = false;
+        ecoEl.innerHTML = `≈ ${fmtBRL(d.today_economia_brl)} <span class="tag">estimado</span>`;
+      } else {
+        ecoEl.hidden = true;
+      }
+
+      document.getElementById("updated-at").textContent = new Date(d.updated_at).toLocaleTimeString("pt-BR");
+    }
+
+    const COMM_TIMEOUT_MIN = 15;
+    const INV_STATUS_META = {
+      gerando: { cls: "st-good", label: "Gerando", tip: "Gerando energia agora." },
+      online_sem_geracao: { cls: "st-idle", label: "Online, sem geração", tip: "Conectado à nuvem, sem geração agora — normal à noite ou com pouco sol." },
+      sem_comunicacao: { cls: "st-critical", label: "Sem comunicação", tip: `Sem resposta da API há mais de ${COMM_TIMEOUT_MIN} min (3 ciclos de coleta) — pode indicar queda de energia, Wi-Fi ou disjuntor.` },
+    };
+
+    async function refreshInverters() {
+      const r = await fetch("/api/inverters");
+      const d = await r.json();
+      for (const inv of ["huawei", "foxess"]) {
+        const data = d[inv] || {};
+        document.getElementById(`inv-${inv}-power`).textContent = fmtNum(data.power_kw, 2);
+        document.getElementById(`inv-${inv}-day`).textContent = fmtNum(data.day_kwh);
+        document.getElementById(`inv-${inv}-temp`).textContent =
+          (data.temperature_c !== null && data.temperature_c !== undefined) ? `${fmtNum(data.temperature_c, 0)}°C` : "--";
+
+        const meta = INV_STATUS_META[data.status] || INV_STATUS_META.sem_comunicacao;
+        const pill = document.getElementById(`inv-${inv}-status`);
+        pill.className = `inv-status ${meta.cls}`;
+        pill.innerHTML = `<i></i>${meta.label}`;
+        document.getElementById(`inv-${inv}-tip`).textContent = meta.tip;
+      }
+    }
+
+    async function refreshDayStatus() {
+      const r = await fetch("/api/day-status");
+      const d = await r.json();
+
+      document.getElementById("day-status-date").textContent = d.date ?? "--";
+      document.getElementById("day-status-weather").textContent = d.weather ?? "--";
+      document.getElementById("day-status-generated").innerHTML =
+        d.generated_kwh !== null ? `${fmtNum(d.generated_kwh)} <span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-ui)">kWh</span>` : "--";
+
+      const pill = document.getElementById("day-status-pill");
+      const sw = pill.querySelector(".sw");
+      const label = pill.querySelector(".label");
+      const detailEl = document.getElementById("day-status-alarm-detail");
+      if (d.has_alarm === null || d.has_alarm === undefined) {
+        sw.style.background = "var(--ink-muted)";
+        label.textContent = "--";
+        detailEl.textContent = "";
+      } else if (d.has_alarm) {
+        sw.style.background = "var(--critical)";
+        label.textContent = "Alerta";
+        detailEl.textContent = d.alarm_detail || "Alarme ativo";
+      } else {
+        sw.style.background = "var(--good)";
+        label.textContent = "Ok";
+        detailEl.textContent = "Nenhum alarme ativo";
+      }
+
+      const bandeiraItem = document.getElementById("day-bandeira");
+      if (d.bandeira) {
+        bandeiraItem.hidden = false;
+        document.getElementById("day-bandeira-dot").className = `flag-dot ${d.bandeira.split(" ")[0].toLowerCase()}`;
+        document.getElementById("day-bandeira-name").textContent = d.bandeira;
+        document.getElementById("day-bandeira-tip").textContent =
+          d.bandeira_valor_kwh !== null && d.bandeira_valor_kwh !== undefined
+            ? `R$ ${fmtNum(d.bandeira_valor_kwh, 5).replace(".", ",")}/kWh de acréscimo nessa bandeira`
+            : "";
+      } else {
+        bandeiraItem.hidden = true;
+      }
+
+      document.getElementById("day-sun").textContent = (d.sunrise && d.sunset) ? `${d.sunrise} – ${d.sunset}` : "--";
+    }
+
+    const RATING_ICON = { bom: "☀️", moderado: "⛅", ruim: "🌧️" };
+    // Escala fixa até 20 MJ/m² (dia de céu limpo típico na região) — dá contexto
+    // comparável entre os dias em vez de reescalar pelo máximo da semana.
+    const radiationMeterPct = (mj) => Math.max(4, Math.min(100, Math.round((mj / 20) * 100)));
+
+    async function refreshForecast() {
+      const r = await fetch("/api/forecast");
+      const days = await r.json();
+
+      const container = document.getElementById("forecast-cards");
+      container.innerHTML = "";
+      days.forEach((d, i) => {
+        const icon = RATING_ICON[d.rating] ?? "⛅";
+        const weekday = new Date(d.date + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+        const label = i === 0 ? "Hoje" : weekday.charAt(0).toUpperCase() + weekday.slice(1);
+        const el = document.createElement("div");
+        el.className = "fc-day";
+        el.innerHTML = `
+          <div class="d">${label}</div>
+          <div class="ic">${icon}</div>
+          <div class="cond">${d.weather}</div>
+          <div class="fc-stats">
+            <div class="rad">${fmtNum(d.solar_radiation_mj_m2)} <span class="unit">MJ/m²</span><div class="rad-meter"><i style="width:${radiationMeterPct(d.solar_radiation_mj_m2)}%"></i></div></div>
+            <div class="t">${fmtNum(d.temp_max, 0)}°/${fmtNum(d.temp_min, 0)}°</div>
+          </div>
+        `;
+        container.appendChild(el);
+      });
+    }
+
+    // ---------- Consumo ----------
+    const CONSUMO_UCS = { "19647901154": "#3987e5", "298240601131": "#199e70" };
+    const consumoCharts = {};
+
+    async function refreshConsumptionSummary() {
+      const r = await fetch("/api/consumption/summary");
+      const d = await r.json();
+
+      document.getElementById("consumo-economia").textContent = fmtBRL(d.economia_estimada_brl);
+
+      for (const uc of Object.keys(CONSUMO_UCS)) {
+        const latest = d.unidades?.[uc]?.latest;
+        const refEl = document.getElementById(`consumo-${uc}-referencia`);
+        const valEl = document.getElementById(`consumo-${uc}-valores`);
+        if (!latest) {
+          refEl.textContent = "--";
+          valEl.textContent = "--";
+          continue;
+        }
+        refEl.textContent = latest.referencia;
+        valEl.textContent = `${fmtNum(latest.consumed_kwh)} kWh · ${fmtBRL(latest.total_value_brl)}`;
+      }
+    }
+
+    async function refreshConsumptionHistory(uc) {
+      const r = await fetch(`/api/consumption/history?uc=${uc}`);
+      const rows = await r.json();
+
+      const labels = rows.map(row => row.referencia);
+      const kwh = rows.map(row => row.consumed_kwh);
+
+      if (consumoCharts[uc]) consumoCharts[uc].destroy();
+      consumoCharts[uc] = new Chart(document.getElementById(`consumo-chart-${uc}`), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{ data: kwh, backgroundColor: CONSUMO_UCS[uc], borderRadius: 4, borderSkipped: false, maxBarThickness: 22 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { ...chartTooltipStyle(), callbacks: { label: (ctx) => `${fmtNum(ctx.parsed.y)} kWh` } },
+          },
+          scales: {
+            x: { ticks: { color: "#898781", font: CHART_FONT }, grid: { display: false } },
+            y: { ticks: { color: "#898781", font: CHART_FONT }, grid: { color: "#2c2c2a" }, beginAtZero: true },
+          },
+        },
+      });
+    }
+
+    function refreshConsumptionTab() {
+      refreshConsumptionSummary();
+      Object.keys(CONSUMO_UCS).forEach(refreshConsumptionHistory);
+    }
+
+    async function uploadConsumption(uc, inputEl) {
+      const file = inputEl.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById(`consumo-upload-status-${uc}`);
+      statusEl.textContent = "Enviando e lendo o PDF...";
+      statusEl.style.color = "var(--ink-muted)";
+
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const r = await fetch("/api/consumption/upload", { method: "POST", body: formData });
+        if (!r.ok) {
+          const err = await r.json();
+          throw new Error(err.detail || "Falha ao processar o PDF");
+        }
+        const d = await r.json();
+        statusEl.textContent = `Importado: ${d.referencia} · ${fmtNum(d.consumo_kwh)} kWh · ${fmtBRL(d.total_pagar_brl)} (+${d.meses_historico_importados} meses de histórico)`;
+        statusEl.style.color = "var(--good)";
+        refreshConsumptionTab();
+      } catch (e) {
+        statusEl.textContent = `Erro: ${e.message}`;
+        statusEl.style.color = "var(--critical)";
+      } finally {
+        inputEl.value = "";
+      }
+    }
+
+    // ---------- Navegação ----------
+    const PAGE_TITLES = { dashboard: "Dashboard", historico: "Histórico", consumo: "Consumo" };
+
+    function showView(name) {
+      document.querySelectorAll(".tab-view").forEach(v => v.hidden = true);
+      document.getElementById(`tab-${name}`).hidden = false;
+      document.getElementById("page-title").textContent = PAGE_TITLES[name] ?? name;
+      document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.dataset.tab === name));
+      if (name === "consumo") refreshConsumptionTab();
+    }
+
+    document.querySelectorAll(".nav a").forEach(a => {
+      a.addEventListener("click", () => showView(a.dataset.tab));
+    });
+
+    initGeracaoChart("dash", "dash-canvas");
+    initGeracaoChart("hist", "hist-canvas", { tableBodyId: "hist-table-body" });
+
+    refreshSummary();
+    refreshInverters();
+    refreshDayStatus();
+    refreshForecast();
+    setInterval(refreshSummary, 30000);
+    setInterval(refreshInverters, 30000);
+    setInterval(refreshDayStatus, 30000);
+    setInterval(refreshForecast, 1800000);
+  </script>
+</body>
+</html>
