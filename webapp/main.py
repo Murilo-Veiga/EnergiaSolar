@@ -76,7 +76,26 @@ UC_LABELS = {
 }
 
 
+def _hour_in_daylight(hour_index: int, sunrise_hhmm: str, sunset_hhmm: str) -> bool:
+    sunrise_h = int(sunrise_hhmm[:2]) + int(sunrise_hhmm[3:5]) / 60
+    sunset_h = int(sunset_hhmm[:2]) + int(sunset_hhmm[3:5]) / 60
+    return sunrise_h <= (hour_index + 0.5) <= sunset_h
+
+
+# O frontend consulta /api/day-status a cada 30s e /api/forecast a cada 30min
+# (ver templates/index.html) — sem cache isso batia na Open-Meteo ~2900x/dia
+# pra um dado que o modelo deles só atualiza a cada poucas horas. Cache simples
+# em memória (1 processo uvicorn, sem múltiplos workers — não precisa de nada
+# além de uma variável de módulo) resolve sem perder responsividade real.
+_FORECAST_CACHE_TTL = timedelta(hours=2)
+_forecast_cache: dict = {"data": None, "fetched_at": None}
+
+
 def _forecast_days():
+    now = datetime.now(timezone.utc)
+    if _forecast_cache["data"] is not None and (now - _forecast_cache["fetched_at"]) < _FORECAST_CACHE_TTL:
+        return _forecast_cache["data"]
+
     resp = requests.get(
         "https://api.open-meteo.com/v1/forecast",
         params={
@@ -85,32 +104,58 @@ def _forecast_days():
             "daily": "weathercode,temperature_2m_max,temperature_2m_min,"
             "shortwave_radiation_sum,precipitation_sum,precipitation_probability_max,"
             "sunrise,sunset",
+            "hourly": "weathercode,cloudcover",
             "timezone": "America/Sao_Paulo",
             "forecast_days": 5,
         },
         timeout=10,
     )
     resp.raise_for_status()
-    daily = resp.json()["daily"]
+    data = resp.json()
+    daily = data["daily"]
+    hourly = data["hourly"]
 
     days = []
     for i, date in enumerate(daily["time"]):
         code = daily["weathercode"][i]
         description, rating = WMO_CODES.get(code, ("Desconhecido", "moderado"))
-        days.append(
-            {
-                "date": date,
-                "weather": description,
-                "rating": rating,
-                "temp_max": daily["temperature_2m_max"][i],
-                "temp_min": daily["temperature_2m_min"][i],
-                "solar_radiation_mj_m2": daily["shortwave_radiation_sum"][i],
-                "precipitation_mm": daily["precipitation_sum"][i],
-                "precipitation_probability_pct": daily["precipitation_probability_max"][i],
-                "sunrise": daily["sunrise"][i][11:16],
-                "sunset": daily["sunset"][i][11:16],
-            }
-        )
+        sunrise = daily["sunrise"][i][11:16]
+        sunset = daily["sunset"][i][11:16]
+
+        day = {
+            "date": date,
+            "weather": description,
+            "rating": rating,
+            "temp_max": daily["temperature_2m_max"][i],
+            "temp_min": daily["temperature_2m_min"][i],
+            "solar_radiation_mj_m2": daily["shortwave_radiation_sum"][i],
+            "precipitation_mm": daily["precipitation_sum"][i],
+            "precipitation_probability_pct": daily["precipitation_probability_max"][i],
+            "sunrise": sunrise,
+            "sunset": sunset,
+        }
+
+        if i == 0:
+            # "weather" (acima) resume as 24h do dia inteiro — inclui madrugada/noite,
+            # que não afeta geração solar nenhuma. Pro card "Status do dia" (só hoje),
+            # recalculamos usando só as horas entre nascer e pôr do sol, que é o que
+            # realmente importa pra usina. Ver README > "Status do dia".
+            start = i * 24
+            hour_codes = hourly["weathercode"][start:start + 24]
+            hour_clouds = hourly["cloudcover"][start:start + 24]
+            codes_in_daylight = [c for h, c in enumerate(hour_codes) if _hour_in_daylight(h, sunrise, sunset)]
+            if codes_in_daylight:
+                daylight_code = max(set(codes_in_daylight), key=codes_in_daylight.count)
+                daylight_desc, _ = WMO_CODES.get(daylight_code, ("Desconhecido", "moderado"))
+                day["weather_daylight"] = daylight_desc
+            else:
+                day["weather_daylight"] = description
+            day["cloudcover_hourly"] = hour_clouds
+
+        days.append(day)
+
+    _forecast_cache["data"] = days
+    _forecast_cache["fetched_at"] = now
     return days
 
 
@@ -278,6 +323,9 @@ def day_status():
 
     common = {
         "weather": today["weather"],
+        "weather_daylight": today.get("weather_daylight"),
+        "solar_radiation_mj_m2": today.get("solar_radiation_mj_m2"),
+        "cloudcover_hourly": today.get("cloudcover_hourly"),
         "sunrise": today["sunrise"],
         "sunset": today["sunset"],
         "has_alarm": has_alarm,

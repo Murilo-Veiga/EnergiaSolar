@@ -34,15 +34,26 @@
   }
   .app { display: flex; height: 100%; }
   .sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 22px 16px; }
-  .brand { padding: 0 6px 20px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
-  .brand .name { font-size: 15px; font-weight: 700; color: var(--accent-blue); letter-spacing: -0.01em; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 20px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  .brand .name { font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
   .brand .sub { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
   .nav a {
-    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px;
+    display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px;
     font-size: 13.5px; color: var(--ink-muted); text-decoration: none; margin-bottom: 2px; font-weight: 500; cursor: pointer;
   }
   .nav a.active { background: rgba(57,135,229,0.14); color: var(--accent-blue); font-weight: 600; }
-  .nav a .ic { width: 16px; text-align: center; opacity: .85; }
+
+  /* ---- sistema de ícones em badge (chip colorido arredondado) ---- */
+  .icon-badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
+  .icon-badge svg { display: block; }
+  .icon-badge.size-nav { width: 27px; height: 27px; }
+  .icon-badge.size-card { width: 32px; height: 32px; border-radius: 9px; }
+  .icon-badge.size-alert { width: 28px; height: 28px; }
+  .icon-badge.blue  { background: rgba(57,135,229,0.14); color: var(--accent-blue); }
+  .icon-badge.aqua  { background: rgba(25,158,112,0.14); color: var(--accent-aqua); }
+  .icon-badge.green { background: rgba(12,163,12,0.13);  color: var(--good); }
+  .icon-badge.gold  { background: rgba(250,178,25,0.14); color: var(--warning); }
+  .icon-badge.red   { background: rgba(208,59,59,0.16);  color: var(--critical); }
 
   .main { flex: 1; overflow-y: auto; padding: 28px 32px; }
   .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
@@ -127,7 +138,7 @@
   .alert-item.critical { border-left-color: var(--critical); }
   .alert-item.warning { border-left-color: var(--warning); }
   .alert-item.info { border-left-color: var(--accent-blue); }
-  .alert-icon { font-size: 15px; line-height: 1.3; flex-shrink: 0; }
+  .alert-icon { flex-shrink: 0; }
   .alert-item-body { flex: 1; min-width: 0; }
   .alert-title { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
   .alert-desc { font-size: 11.5px; color: var(--ink-muted); line-height: 1.5; }
@@ -180,7 +191,7 @@
 
   /* Bottom row */
   .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .day-card { padding: 18px 20px; }
+  .day-card { padding: 18px 20px; display: flex; flex-direction: column; justify-content: center; }
   .day-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .day-card h3 { font-size: 13px; font-weight: 600; margin: 0; color: var(--ink-2); }
   .day-card .date { font-size: 12px; color: var(--ink-muted); }
@@ -192,6 +203,18 @@
   .day-extra-item .l { color: var(--ink-muted); }
   .day-extra-item .v { color: var(--ink-2); font-weight: 600; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
   .day-extra-item[hidden] { display: none; }
+  .sparkline-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .sparkline-box[hidden] { display: none; }
+  .sparkline-label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 8px; }
+  .sparkline-caption { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 4px; }
+
+  /* ---- selo "novo" — regra do projeto: toda aba/menu/seção nova fica com
+     esse selo por NEW_FEATURE_DAYS (ver JS), depois some sozinho ---- */
+  .new-badge {
+    display: inline-flex; align-items: center; font-family: var(--font-ui); font-size: 8.5px; font-weight: 750;
+    letter-spacing: .04em; text-transform: uppercase; color: var(--good); background: rgba(12,163,12,0.14);
+    padding: 1.5px 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
+  }
 
   .forecast-card { padding: 18px 20px; }
   .forecast-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 14px; color: var(--ink-2); }
@@ -258,14 +281,17 @@
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="name">☀ Solar Home</div>
-        <div class="sub">Painel de Monitoramento</div>
+        <span class="icon-badge blue size-nav" data-icon="sun"></span>
+        <div>
+          <div class="name">Solar Home</div>
+          <div class="sub">Painel de Monitoramento</div>
+        </div>
       </div>
       <nav class="nav">
-        <a class="active" data-tab="dashboard"><span class="ic">▤</span> Dashboard</a>
-        <a data-tab="historico"><span class="ic">▲</span> Histórico</a>
-        <a data-tab="saude"><span class="ic">♡</span> Saúde da usina</a>
-        <a data-tab="consumo"><span class="ic">▦</span> Consumo</a>
+        <a class="active" data-tab="dashboard"><span class="icon-badge blue size-nav" data-icon="layoutGrid"></span> Dashboard</a>
+        <a data-tab="historico"><span class="icon-badge blue size-nav" data-icon="trendingUp"></span> Histórico</a>
+        <a data-tab="saude"><span class="icon-badge green size-nav" data-icon="activity"></span> Saúde da usina<span data-new-key="nav-saude"></span></a>
+        <a data-tab="consumo"><span class="icon-badge aqua size-nav" data-icon="wallet"></span> Consumo</a>
       </nav>
     </aside>
 
@@ -386,8 +412,8 @@
             </div>
             <div class="day-grid">
               <div>
-                <div class="l">Clima</div>
-                <div class="v" id="day-status-weather" style="font-family:var(--font-ui)">--</div>
+                <div class="l" id="day-status-weather-label">Clima</div>
+                <div class="v" style="font-family:var(--font-ui)"><span id="day-status-weather">--</span><span data-new-key="clima-horas-de-sol"></span></div>
               </div>
               <div>
                 <div class="l">Situação</div>
@@ -408,6 +434,14 @@
               <div class="day-extra-item">
                 <span class="l">Sol</span> <span class="v" id="day-sun">--</span>
               </div>
+              <div class="day-extra-item" id="day-radiation" hidden>
+                <span class="l">Irradiância</span> <span class="v" id="day-radiation-value">--</span>
+              </div>
+            </div>
+            <div class="sparkline-box" id="day-cloud-box" hidden>
+              <div class="sparkline-label">Nuvens ao longo do dia</div>
+              <div id="day-cloud-sparkline"></div>
+              <div class="sparkline-caption"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div>
             </div>
           </div>
 
@@ -432,8 +466,9 @@
         <div class="card alert-card hist-collapsible open" id="hist-gerado-card">
           <button class="alert-toggle" data-target="hist-gerado-body">
             <div class="alert-head">
+              <span class="icon-badge blue size-card" data-icon="sun"></span>
               <span class="tt">
-                <h3>☀ Quanto sua usina gerou</h3>
+                <h3>Quanto sua usina gerou</h3>
                 <span class="tip tip-wide">Mostra a energia produzida no período escolhido, dia a dia, e se está gerando mais ou menos do que no período anterior.</span>
               </span>
             </div>
@@ -452,8 +487,9 @@
         <div class="card alert-card hist-collapsible" id="hist-economia-card">
           <button class="alert-toggle" data-target="hist-economia-body">
             <div class="alert-head">
+              <span class="icon-badge aqua size-card" data-icon="wallet"></span>
               <span class="tt">
-                <h3>💰 Quanto você economizou</h3>
+                <h3>Quanto você economizou</h3>
                 <span class="tip tip-wide">Estima quanto você deixou de pagar pra Celesc com a energia que a usina gerou, usando a tarifa da sua fatura mais recente.</span>
               </span>
             </div>
@@ -472,8 +508,9 @@
         <div class="card alert-card hist-collapsible" id="hist-recordes-card">
           <button class="alert-toggle" data-target="hist-recordes-body">
             <div class="alert-head">
+              <span class="icon-badge gold size-card" data-icon="star"></span>
               <span class="tt">
-                <h3>🏆 Seus melhores dias e meses</h3>
+                <h3>Seus melhores dias e meses</h3>
                 <span class="tip tip-wide">Guarda os recordes de geração e potência já alcançados, pra você ter um parâmetro de comparação no futuro. Independe do período selecionado acima — é sempre desde que a usina ligou.</span>
               </span>
             </div>
@@ -491,8 +528,9 @@
         <div class="card alert-card hist-collapsible" id="hist-anotacoes-card">
           <button class="alert-toggle" data-target="hist-anotacoes-body">
             <div class="alert-head">
+              <span class="icon-badge blue size-card" data-icon="mapPin"></span>
               <span class="tt">
-                <h3>📌 Anotações sobre eventos importantes</h3>
+                <h3>Anotações sobre eventos importantes</h3>
                 <span class="tip tip-wide">Espaço pra você anotar algo que aconteceu num dia específico (uma limpeza, um reparo) e ajuda a explicar um salto no gráfico depois.</span>
               </span>
             </div>
@@ -533,8 +571,9 @@
         <div class="card alert-card hist-collapsible open" id="saude-inversores-card">
           <button class="alert-toggle" data-target="saude-inversores-body">
             <div class="alert-head">
+              <span class="icon-badge blue size-card" data-icon="shuffle"></span>
               <span class="tt">
-                <h3>🔀 Quanto cada inversor contribuiu</h3>
+                <h3>Quanto cada inversor contribuiu</h3>
                 <span class="tip tip-wide">Compara a geração da Huawei com a da FoxESS ao longo do tempo, pra notar se um lado da usina está rendendo menos que o outro.</span>
               </span>
             </div>
@@ -624,6 +663,71 @@
   <script>
     const fmtNum = (v, digits = 1) => (v === null || v === undefined) ? "--" : Number(v).toFixed(digits);
     const fmtBRL = (v) => (v === null || v === undefined) ? "--" : `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
+
+    // ---------- Ícones (badge/flat — chip colorido + SVG inline, sem fonte de ícone) ----------
+    const ICON_BG = {
+      blue: "rgba(57,135,229,0.14)",
+      aqua: "rgba(25,158,112,0.14)",
+      green: "rgba(12,163,12,0.13)",
+      gold: "rgba(250,178,25,0.14)",
+      red: "rgba(208,59,59,0.16)",
+    };
+
+    function iconSvg(name, size, bg) {
+      const body = {
+        sun: `<circle cx="12" cy="12" r="4.3" fill="currentColor"/>` +
+          [0, 45, 90, 135, 180, 225, 270, 315].map(a => `<rect x="11.25" y="1.3" width="1.5" height="3.7" rx="0.75" fill="currentColor" transform="rotate(${a} 12 12)"/>`).join(""),
+        layoutGrid: `<rect x="3" y="3" width="7.5" height="7.5" rx="1.5" fill="currentColor"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" fill="currentColor"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" fill="currentColor"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" fill="currentColor"/>`,
+        trendingUp: `<polyline points="3,17 9,11 13,15 21,6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><polygon points="21,6 14.5,6 21,12.5" fill="currentColor"/>`,
+        activity: `<polyline points="2,12 7,12 9,5 13,19 15,12 22,12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+        wallet: `<rect x="3" y="6" width="18" height="13" rx="2.2" fill="currentColor"/><circle cx="17" cy="14.3" r="1.5" fill="${bg}"/>`,
+        star: `<path d="M12 3.3 L14.6 8.9 L20.7 9.7 L16.3 13.8 L17.5 19.9 L12 16.8 L6.5 19.9 L7.7 13.8 L3.3 9.7 L9.4 8.9 Z" fill="currentColor"/>`,
+        mapPin: `<path d="M12 21.5s7-6.4 7-11.7a7 7 0 1 0-14 0c0 5.3 7 11.7 7 11.7z" fill="currentColor"/><circle cx="12" cy="9.8" r="2.3" fill="${bg}"/>`,
+        shuffle: `<polyline points="17,3 21,7 17,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7h9.5a4 4 0 0 1 3.5 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="17,13 21,17 17,21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h9.5a4 4 0 0 0 3.5-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+        alertTriangle: `<path d="M12 3.2 L22 20.8 L2 20.8 Z" fill="currentColor"/><line x1="12" y1="9.3" x2="12" y2="14" stroke="${bg}" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="17.2" x2="12.01" y2="17.2" stroke="${bg}" stroke-width="1.8" stroke-linecap="round"/>`,
+        thermometer: `<path d="M12 14.5V4.3a2.1 2.1 0 0 0-4.2 0v10.2a4.1 4.1 0 1 0 4.2 0Z" fill="currentColor"/>`,
+        flag: `<path d="M5 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 4.2h11.5l-2.7 4.3l2.7 4.3H5Z" fill="currentColor"/>`,
+        trendingDown: `<polyline points="3,7 9,13 13,9 21,18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><polygon points="21,18 21,11.5 14.5,18" fill="currentColor"/>`,
+        plug: `<path d="M9 2.5v4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 2.5v4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 7.7h10v4a5 5 0 0 1-10 0v-4Z" fill="currentColor"/><path d="M12 16.7v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+      }[name] || "";
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">${body}</svg>`;
+    }
+
+    // Pinta todo <span class="icon-badge ..." data-icon="nome"> já presente no HTML estático
+    // (nav, cabeçalhos de card) — os ícones dos alertas são renderizados à parte em renderAlertList,
+    // já que a lista inteira é gerada dinamicamente.
+    function paintIconBadges() {
+      document.querySelectorAll("[data-icon]").forEach(el => {
+        const colorClass = ["blue", "aqua", "green", "gold", "red"].find(c => el.classList.contains(c)) || "blue";
+        const size = el.classList.contains("size-card") ? 18 : 15;
+        el.innerHTML = iconSvg(el.dataset.icon, size, ICON_BG[colorClass]);
+      });
+    }
+
+    // ---------- Selo "novo" ----------
+    // Regra do projeto: toda aba, menu ou seção nova ganha esse selo por
+    // NEW_FEATURE_DAYS a partir da data de adição, pra chamar atenção de quem
+    // já usa o painel — depois desse prazo some sozinho, sem precisar lembrar
+    // de tirar manualmente. Registrar a chave + data (YYYY-MM-DD, dia em que
+    // a novidade foi ao ar) toda vez que uma dessas for adicionada.
+    const NEW_FEATURE_DAYS = 5;
+    const NEW_FEATURES_SINCE = {
+      "nav-saude": "2026-07-16",
+      "clima-horas-de-sol": "2026-07-16",
+    };
+
+    function isFeatureNew(key) {
+      const since = NEW_FEATURES_SINCE[key];
+      if (!since) return false;
+      const ageDays = (Date.now() - new Date(`${since}T00:00:00`).getTime()) / 86400000;
+      return ageDays >= 0 && ageDays < NEW_FEATURE_DAYS;
+    }
+
+    function paintNewBadges() {
+      document.querySelectorAll("[data-new-key]").forEach(el => {
+        el.innerHTML = isFeatureNew(el.dataset.newKey) ? `<span class="new-badge">novo</span>` : "";
+      });
+    }
 
     const CHART_FONT = { family: "var(--font-data)", size: 10.5 };
     function chartTooltipStyle() {
@@ -1023,7 +1127,9 @@
       const d = await r.json();
 
       document.getElementById("day-status-date").textContent = d.date ?? "--";
-      document.getElementById("day-status-weather").textContent = d.weather ?? "--";
+      document.getElementById("day-status-weather").textContent = d.weather_daylight ?? d.weather ?? "--";
+      document.getElementById("day-status-weather-label").textContent =
+        (d.weather_daylight && d.sunrise && d.sunset) ? `Clima (${d.sunrise}–${d.sunset})` : "Clima";
       document.getElementById("day-status-generated").innerHTML =
         d.generated_kwh !== null ? `${fmtNum(d.generated_kwh)} <span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-ui)">kWh</span>` : "--";
 
@@ -1059,6 +1165,51 @@
       }
 
       document.getElementById("day-sun").textContent = (d.sunrise && d.sunset) ? `${d.sunrise} – ${d.sunset}` : "--";
+
+      const radItem = document.getElementById("day-radiation");
+      if (d.solar_radiation_mj_m2 !== null && d.solar_radiation_mj_m2 !== undefined) {
+        radItem.hidden = false;
+        document.getElementById("day-radiation-value").textContent = `${fmtNum(d.solar_radiation_mj_m2)} MJ/m²`;
+      } else {
+        radItem.hidden = true;
+      }
+
+      const cloudBox = document.getElementById("day-cloud-box");
+      if (d.cloudcover_hourly && d.sunrise && d.sunset) {
+        cloudBox.hidden = false;
+        renderCloudSparkline(d.cloudcover_hourly, d.sunrise, d.sunset);
+      } else {
+        cloudBox.hidden = true;
+      }
+    }
+
+    // Barras de cobertura de nuvem por hora (00h-23h), com a janela entre
+    // nascer e pôr do sol destacada — mostra visualmente por que o resumo de
+    // clima (calculado só nessa janela) pode diferir do resumo de 24h.
+    function renderCloudSparkline(cloudcover, sunriseHHMM, sunsetHHMM) {
+      const w = 900, h = 60;
+      const n = cloudcover.length;
+      const stepX = w / n;
+      const sunriseH = parseInt(sunriseHHMM.slice(0, 2), 10) + parseInt(sunriseHHMM.slice(3, 5), 10) / 60;
+      const sunsetH = parseInt(sunsetHHMM.slice(0, 2), 10) + parseInt(sunsetHHMM.slice(3, 5), 10) / 60;
+      const dayX0 = (sunriseH / 24) * w;
+      const dayX1 = (sunsetH / 24) * w;
+
+      let s = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;display:block" preserveAspectRatio="none">`;
+      s += `<rect x="${dayX0.toFixed(1)}" y="0" width="${(dayX1 - dayX0).toFixed(1)}" height="${h}" fill="var(--warning)" opacity="0.08"/>`;
+      s += `<line x1="0" y1="${h - 0.5}" x2="${w}" y2="${h - 0.5}" stroke="var(--line)" stroke-width="1"/>`;
+      const gap = 2;
+      const bw = stepX - gap;
+      cloudcover.forEach((v, i) => {
+        const bh = (v / 100) * (h - 4);
+        const x = i * stepX;
+        const inDaylight = (i + 0.5) >= sunriseH && (i + 0.5) <= sunsetH;
+        const color = inDaylight ? "var(--warning)" : "var(--ink-muted)";
+        const op = inDaylight ? 1 : 0.5;
+        s += `<rect x="${x.toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="${color}" opacity="${op}"/>`;
+      });
+      s += `</svg>`;
+      document.getElementById("day-cloud-sparkline").innerHTML = s;
     }
 
     // ---------- Central de alertas ----------
@@ -1069,6 +1220,7 @@
     const GERACAO_ABAIXO_MEDIA_PCT = 10;
     const API_FAILURE_ALERT_THRESHOLD = 2; // igual ao FAILURE_ALERT_THRESHOLD do collector/main.py
     const INV_LABELS = { huawei: "Huawei", foxess: "FoxESS" };
+    const SEV_COLOR = { critical: "red", warning: "gold", info: "blue" };
 
     function computeAlerts(c) {
       const alerts = [];
@@ -1078,7 +1230,7 @@
         if (d.status === "sem_comunicacao") {
           alerts.push({
             key: `comm:${inv}`,
-            sev: "critical", icon: "⚠",
+            sev: "critical", icon: "alertTriangle",
             title: `${INV_LABELS[inv]} sem comunicação`,
             desc: INV_STATUS_META.sem_comunicacao.tip,
           });
@@ -1086,7 +1238,7 @@
         if (d.consecutive_failures >= API_FAILURE_ALERT_THRESHOLD) {
           alerts.push({
             key: `api_failure:${inv}`,
-            sev: "warning", icon: "🔌",
+            sev: "warning", icon: "plug",
             title: `Falha ao consultar a API da ${INV_LABELS[inv]} (${d.consecutive_failures}x seguidas)`,
             desc: d.last_error
               ? `Último erro: ${d.last_error} — "Gerado hoje" segue com o último valor bem-sucedido enquanto isso não normalizar.`
@@ -1096,7 +1248,7 @@
         if (d.temperature_c !== null && d.temperature_c !== undefined && d.temperature_c >= TEMP_THRESHOLD_C) {
           alerts.push({
             key: `temp:${inv}`,
-            sev: "warning", icon: "🌡",
+            sev: "warning", icon: "thermometer",
             title: `Temperatura do inversor ${INV_LABELS[inv]} em ${fmtNum(d.temperature_c, 0)}°C`,
             desc: `Acima do limiar ilustrativo de ${TEMP_THRESHOLD_C}°C (não validado com o fabricante ainda) — vale checar ventilação/sombra no local de instalação.`,
           });
@@ -1106,7 +1258,7 @@
       if (c.bandeira && c.bandeira.toLowerCase() !== "verde") {
         alerts.push({
           key: `bandeira:${c.bandeira.toLowerCase()}`,
-          sev: "warning", icon: "🚩",
+          sev: "warning", icon: "flag",
           title: `Bandeira ${c.bandeira.toLowerCase()} ativa esse mês`,
           desc: (c.bandeiraValorKwh !== null && c.bandeiraValorKwh !== undefined)
             ? `Acréscimo de R$ ${fmtNum(c.bandeiraValorKwh, 5).replace(".", ",")}/kWh — tarifa mais alta que o normal enquanto durar.`
@@ -1119,7 +1271,7 @@
         if (diffPct >= GERACAO_ABAIXO_MEDIA_PCT) {
           alerts.push({
             key: "geracao_baixa",
-            sev: "info", icon: "📉",
+            sev: "info", icon: "trendingDown",
             title: `Geração de hoje ${diffPct}% abaixo da média da semana`,
             desc: `${fmtNum(c.todayKwh)} kWh hoje vs. média de ${fmtNum(c.weekAvgKwh)} kWh nos últimos 7 dias — pode ser só o clima, não é necessariamente um problema.`,
           });
@@ -1172,7 +1324,7 @@
         empty.hidden = true;
         list.innerHTML = unread.map(a => `
           <div class="alert-item ${a.sev}">
-            <div class="alert-icon">${a.icon}</div>
+            <div class="alert-icon icon-badge size-alert ${SEV_COLOR[a.sev]}">${iconSvg(a.icon, 15, ICON_BG[SEV_COLOR[a.sev]])}</div>
             <div class="alert-item-body">
               <div class="alert-title">${a.title}</div>
               <div class="alert-desc">${a.desc}</div>
@@ -1348,6 +1500,8 @@
       a.addEventListener("click", () => showView(a.dataset.tab));
     });
 
+    paintIconBadges();
+    paintNewBadges();
     initGeracaoChart("dash", "dash-canvas");
     initHistoricoTab();
 

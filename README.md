@@ -5,47 +5,18 @@ Painel próprio de monitoramento para a usina solar residencial, rodando
 diretamente pela **API oficial do seu fabricante** (Huawei FusionSolar e
 FoxESS Cloud) — sem depender de nenhum acesso de usuário de terceiros.
 
-**Sumário:** [Princípio de design](#princípio-de-design-fácil-de-ler-pra-qualquer-idade) ·
-[Arquitetura](#arquitetura) · [Como rodar](#como-rodar) ·
+**Sumário:** [Arquitetura](#arquitetura) · [Como rodar](#como-rodar) ·
 [Detalhes da instalação](#detalhes-da-instalação) ·
 [Fontes de dados oficiais](#fontes-de-dados-oficiais) ·
+[Falhas de coleta e fallback seguro](#falhas-de-coleta-e-fallback-seguro) ·
 [Limitações conhecidas](#limitações-conhecidas) ·
 [Design do painel](#design-do-painel) ·
 [Aba Histórico](#aba-histórico) · [Menu Saúde da usina](#menu-saúde-da-usina) ·
-[Falhas de coleta e fallback seguro](#falhas-de-coleta-e-fallback-seguro) ·
 [Consumo por unidade consumidora](#consumo-por-unidade-consumidora-celesc) ·
+[Princípio de design](#princípio-de-design-fácil-de-ler-pra-qualquer-idade) ·
+[Selo "novo"](#regra-selo-novo-por-5-dias) ·
 [Estrutura do projeto](#estrutura-do-projeto) ·
 [Pendências](#pendências--próximos-passos)
-
-## Princípio de design: fácil de ler pra qualquer idade
-
-**Toda melhoria futura no painel — nova métrica, novo menu, novo alerta —
-precisa ser pensada pra alguém sem bagagem técnica (ex.: usuário idoso)
-conseguir olhar e entender o que está vendo, sem precisar perguntar.** Isso
-vale mais que qualquer preferência técnica de nomenclatura. Na prática:
-
-- **Título em linguagem direta, não jargão técnico.** "A usina está
-  aproveitando bem o sol?" em vez de "Performance Ratio". O termo técnico
-  pode aparecer como legenda secundária menor, nunca como título principal.
-- **Resumo ao passar o mouse** em qualquer título de seção/métrica nova,
-  explicando em 1-2 frases o que aquele bloco analisa — antes mesmo de abrir
-  (componente `.tt`/`.tip` já existente em `templates/index.html`; usar a
-  variante `.tip-wide` quando o texto for mais longo que uma frase curta).
-- **Progressive disclosure**: seções recolhidas por padrão (mesmo padrão
-  visual da Central de Alertas — classes `.alert-card`/`.alert-toggle`/
-  `.alert-body`, reaproveitadas em vez de criar um componente novo), pra
-  tela abrir limpa em vez de uma parede de números. Só o resumo mais
-  importante do período fica aberto de cara.
-- **Nunca esconder atrás de um termo sem explicação**: todo número tem, no
-  mínimo, uma legenda curta dizendo o que ele significa (ex.: "kWh pra cada
-  kW instalado" em vez de só "kWh/kWp").
-- **Nome de menu reflete a pergunta que a pessoa está fazendo**, não a
-  origem técnica do dado. Foi por isso que "Qualidade da geração" virou seu
-  próprio menu, "Saúde da usina" — ver "Design do painel".
-
-Esse princípio nasceu da revisão da aba Histórico (mockup iterado e aprovado
-em Artifact — ver "Design do painel"), mas vale pra qualquer tela nova do
-projeto daqui pra frente.
 
 ## Arquitetura
 
@@ -141,6 +112,39 @@ Documentação oficial: https://www.foxesscloud.com/public/i18n/en/OpenApiDocume
 - Rate limit: 1440 chamadas/dia por inversor, máx. 1 requisição/segundo —
   bem mais folgado que a Huawei.
 
+## Falhas de coleta e fallback seguro
+
+Cada inversor é coletado num `try/except` isolado (ver "Status por
+inversor"), mas uma falha pontual na API não pode fazer o painel mentir sobre
+o que já foi gerado. Duas proteções em `collector/main.py`:
+
+- **`_carry_forward_day_kwh`**: geração diária só cresce, então quando a
+  consulta de um inversor falha nesse ciclo, o total "Gerado hoje"
+  (`daily_generation.generated_kwh`) usa o último `day_kwh` bem-sucedido
+  daquele inversor em vez de contar a contribuição dele como zero. Sem
+  sucesso ainda no dia (ex.: primeira tentativa do dia já falha), assume 0 —
+  mesmo comportamento de antes do inversor acordar. Estado em memória, por
+  inversor, resetado por dia.
+- **Alerta de falha constante**: cada ciclo grava um ponto
+  `collector_health` (tag `inverter`, campos `consecutive_failures` e
+  `last_error`) — sucesso zera o contador, falha incrementa. A partir de 2
+  falhas seguidas (`FAILURE_ALERT_THRESHOLD`, ~10 min de falha real, não 1
+  blip isolado) o coletor loga como `ERROR` e o webapp expõe o contador via
+  `/api/inverters`, virando alerta na Central de Alertas (ver tabela em
+  "Design do painel").
+  Isso é gravado mesmo se os dois inversores falharem no mesmo ciclo — é
+  justamente aí que o alerta mais importa.
+
+**Caso real que motivou isso** (2026-07-16): `getAlarmList` da Huawei tem um
+limite de taxa mais restrito que os outros endpoints (ver "Fontes de dados
+oficiais"), e falhava de forma determinística em 2 a cada 3 ciclos — cada
+falha zerava a contribuição da Huawei no total do dia, fazendo "Gerado hoje"
+cair momentaneamente. A causa raiz foi resolvida desacoplando o polling de
+alarme (roda a cada 900s, isolado — uma falha nele não derruba mais
+`power_kw`/`day_kwh` do ciclo); o fallback acima é a camada de segurança
+que garante que qualquer falha residual, nesse ou em qualquer outro endpoint,
+nunca faz o total regredir.
+
 ## Limitações conhecidas
 
 1. **Sem previsão de geração**: nem Huawei nem FoxESS oferecem esse dado —
@@ -162,6 +166,215 @@ Documentação oficial: https://www.foxesscloud.com/public/i18n/en/OpenApiDocume
    > 0`) nesse dia local (`_apply_daily_reset_guard` em `collector/main.py`),
    pra não mostrar o total de ontem como se fosse de hoje. Comportamento
    esperado, não indica falha de coleta.
+
+## Design do painel
+
+O layout foi redesenhado (mockup iterado e aprovado em Artifact antes de ir
+pro código real): paleta validada pelo skill de dataviz (contraste + separação
+CVD), números nunca "vestem" a cor da série (identidade vem de um indicador
+ao lado, texto sempre em tinta neutra), tabular-nums pra alinhar dígitos, e
+tooltips em vez de legendas fixas pra explicar estados. O CSS é um sistema de
+tokens próprio (`--surface`, `--ink`, `--accent-*` etc. no `<style>` do
+`index.html`), sem framework de UI; os gráficos são Chart.js estilizado pra
+bater com os tokens.
+
+### Ícones
+
+Trocados de emoji/símbolos Unicode (☀ ▤ 💰 🏆 ⚠ etc.) por um sistema próprio
+de ícones — 4 direções foram comparadas em mockup (linha, preenchido,
+duotone, badge/flat) antes de escolher. Estilo escolhido: **badge/flat** —
+ícone SVG dentro de um chip colorido arredondado, o mesmo padrão que os
+selos de status (`.inv-status`) já usavam antes disso existir como sistema.
+
+- `iconSvg(name, size, bg)` em `templates/index.html`: gera o SVG (24×24,
+  `fill="currentColor"`) de cada ícone. O parâmetro `bg` é usado só pelos
+  ícones que têm um "furo" interno (moeda da carteira, círculo do pin, "!" do
+  alerta) — como o chip ao redor muda de cor conforme o contexto, o furo é
+  pintado com a cor de fundo do chip específico daquela chamada, não uma cor
+  fixa.
+- `.icon-badge` + modificadores de cor (`.blue`/`.aqua`/`.green`/`.gold`/`.red`)
+  e de tamanho (`.size-nav`/`.size-card`/`.size-alert`) no CSS — cor de fundo
+  sempre a mesma tinta suave (~14% opacidade) já usada nos selos de status.
+- Ícones estáticos (marca, navegação, cabeçalhos de card) usam
+  `<span class="icon-badge {cor} {tamanho}" data-icon="{nome}">`, pintados
+  uma vez por `paintIconBadges()` no carregamento da página.
+- Ícones da Central de Alertas são gerados dinamicamente em
+  `renderAlertList()`, com a cor do badge herdada da severidade do alerta
+  (`SEV_COLOR`: crítico→vermelho, atenção→dourado, informativo→azul) — reforço
+  visual que não existia com emoji.
+- "Saúde da usina" usa só o traçado de pulso (`activity`), sem coração — ficou
+  mais direto como ícone de "monitoramento", sem o símbolo de coração que
+  remetia mais a "saúde humana" do que "usina".
+
+### Status por inversor
+
+Cada inversor (Huawei, FoxESS) mostra um selo de status, calculado no
+`webapp` (`/api/inverters`) puramente pela idade do último ponto gravado —
+não existe campo dedicado no InfluxDB pra isso:
+
+| Status | Condição |
+|---|---|
+| **Gerando** | ponto com menos de 15 min e potência > 0 |
+| **Online, sem geração** | ponto com menos de 15 min e potência = 0 (normal à noite) |
+| **Sem comunicação** | nenhum ponto nos últimos 15 min (3 ciclos de coleta de 5 min) |
+
+"Sem comunicação" é o sinal mais próximo de "pode ter caído a energia/Wi-Fi/
+disjuntor" que dá pra obter sem depender de código de status do fabricante —
+pesquisamos os valores de `run_state`/`inverter_state` (Huawei) e `status`
+(FoxESS) e não achamos documentação oficial confiável; um mapeamento
+encontrado numa integração open-source pra FoxESS **contradisse** o que
+observamos ao vivo (status `3` apareceu com o inversor gerando normalmente),
+então preferimos não confiar nisso pra uma decisão real.
+
+Isso só funciona porque `collector/main.py` coleta cada inversor em um
+`try/except` isolado — uma falha na Huawei não impede a FoxESS de gravar no
+mesmo ciclo (e vice-versa).
+
+### Central de alertas
+
+Accordion no topo do Dashboard (fechado por padrão, com contador de alertas
+ativos no badge) que resume tudo que merece atenção. Quais alertas existem
+não tem estado próprio: a lista é recalculada do zero a cada atualização
+(30s) a partir dos mesmos endpoints que já alimentam o resto do dashboard —
+se uma condição deixa de existir, o alerta correspondente some sozinho na
+atualização seguinte (o único estado guardado no cliente é o de "lido", ver
+abaixo):
+
+| Alerta | Origem | Severidade |
+|---|---|---|
+| Inversor sem comunicação | `/api/inverters` → `status == "sem_comunicacao"` | crítico |
+| Falha constante ao consultar a API do inversor (≥2x seguidas) | `/api/inverters` → `consecutive_failures`/`last_error` | atenção |
+| Temperatura do inversor acima do limiar | `/api/inverters` → `temperature_c` | atenção |
+| Bandeira amarela/vermelha ativa | `/api/day-status` → `bandeira` | atenção |
+| Geração do dia ≥10% abaixo da média da semana | `/api/summary` (hoje) vs. `/api/history?range=semana` (média) | informativo |
+
+O limiar de temperatura (`TEMP_THRESHOLD_C = 65`, em `templates/index.html`)
+é **ilustrativo** — não validamos contra a doc oficial dos modelos exatos
+(SIW300H-3K / SIW200G-5K), só pesquisa geral de mercado (ver pendências).
+
+Cada alerta tem um botão "Marcar como lida", que some com ele da lista e do
+contador do badge. A marcação vive em `sessionStorage` (chave por tipo de
+alerta, ex. `bandeira:amarela`), então dura só pro acesso atual — se fechar a
+aba/navegador e abrir de novo, alertas cuja condição ainda esteja ativa
+voltam a aparecer como não lidos. Isso é intencional: marcar como lida serve
+pra não ficar repetindo o mesmo aviso na mesma visita, não pra silenciar a
+condição de vez.
+
+### Status do dia: clima e previsão
+
+- **Clima recalculado só nas horas de sol**: a Open-Meteo entrega um
+  `weathercode` diário que resume as 24h do dia (madrugada e noite incluídas,
+  onde nuvem não afeta geração nenhuma) — descoberto ao investigar por que o
+  card mostrava "Nublado" num dia que, na prática, gerou o recorde histórico
+  da usina. `_forecast_days()` em `webapp/main.py` busca também
+  `hourly=weathercode,cloudcover` na mesma chamada e, só pro dia de hoje,
+  recalcula o resumo (`weather_daylight`) usando a moda do `weathercode`
+  **apenas entre nascer e pôr do sol** (`_hour_in_daylight`). O card mostra
+  esse valor recalculado (com o horário da janela ao lado do rótulo "Clima"),
+  a irradiância do dia (`solar_radiation_mj_m2`, já vinha na chamada mas não
+  aparecia em lugar nenhum) e um gráfico de nuvens hora a hora com a janela
+  de sol destacada — pra deixar visível *por que* o resumo pode divergir do
+  clima de "senso comum" de quem olhou pra fora hoje.
+- **Cache de 2h na consulta à Open-Meteo**: o frontend chama `/api/day-status`
+  a cada 30s e `/api/forecast` a cada 30min — sem cache isso batia na
+  Open-Meteo ao vivo ~2900x/dia pra um dado que o modelo deles só atualiza a
+  cada poucas horas. `_forecast_days()` guarda a resposta numa variável de
+  módulo (`_forecast_cache`) por até `_FORECAST_CACHE_TTL` (2h) antes de
+  consultar de novo — cache em memória simples, suficiente porque o webapp
+  roda como 1 processo uvicorn só (sem múltiplos workers). Reseta sozinho
+  a cada restart do container (só implica 1 consulta a mais logo depois).
+- **Pico de potência do dia + horário**, **bandeira tarifária vigente** (da
+  fatura mais recente, qualquer uma das 2 UCs) e **nascer/pôr do sol**
+  (Open-Meteo) — todos exibidos no mesmo card "Status do dia".
+
+### Outros campos
+
+- **Temperatura do inversor**: Huawei via `getDevRealKpi` (campo
+  `temperature`), FoxESS via a variável `invTemperation`. A Huawei retornou
+  `0.0` em todos os testes até agora — pode ser normal pra esse modelo fora
+  de operação ativa, ou o campo pode não vir preenchido; ainda não
+  confirmamos como se comporta durante geração de pico.
+- **Detalhe do alarme**: quando `has_alarm` é `true`, tentamos extrair o
+  nome/descrição do primeiro alarme (`alarmName`/`name`/`desc`/`alarmCause`,
+  o que vier primeiro). **Não verificado contra um alarme real** — só
+  testamos com a lista vazia, e não há documentação dos nomes de campo
+  exatos. Ajustar quando um alarme de verdade aparecer nos logs.
+
+### Linha de média nos gráficos
+
+Os gráficos "Geração diária" (Dashboard e Histórico) mostram uma linha
+tracejada vermelha com a média do período selecionado (diária pra
+semana/mês, mensal pro ano), num segundo dataset do Chart.js sobreposto às
+barras. O valor fica sempre visível abaixo do total do período, e passar o
+mouse em qualquer barra mostra a média junto no tooltip (mesmo índice do
+eixo X, `interaction.mode: "index"`).
+
+## Aba Histórico
+
+Reformulada (mockup iterado e aprovado em Artifact, com o usuário pedindo
+explicitamente títulos legíveis pra qualquer idade — ver "Princípio de
+design"). Cada métrica é uma seção recolhível independente (reaproveita
+`.alert-card`/`.alert-toggle`/`.alert-body` da Central de Alertas, com
+`overflow: visible` numa classe extra `.hist-collapsible` — o card de
+alerta original usa `overflow: hidden`, que cortava o tooltip; ver
+`initHistoricoTab()` em `templates/index.html`):
+
+| Seção | Título exibido | Fonte |
+|---|---|---|
+| Quanto gerou | "☀ Quanto sua usina gerou" | `/api/history` — aberta por padrão |
+| Quanto economizou | "💰 Quanto você economizou" | `/api/history` (mesmo campo `valor_estimado_brl` de sempre, agora com bloco próprio em vez de escondido atrás do toggle Gerado/Economia) |
+| Recordes | "🏆 Seus melhores dias e meses" | `/api/history/records` — melhor dia, melhor mês (`aggregateWindow(every: 1mo)`), maior potência já vista — sempre desde que a usina ligou, independe do período selecionado |
+| Anotações | "📌 Anotações sobre eventos importantes" | `POST`/`GET /api/annotations` — 1 nota por dia (gravar de novo no mesmo dia sobrescreve), measurement `annotation` dedicado |
+
+O seletor de período (Semana/Mês/Ano, no topo da aba) atualiza os 2
+primeiros blocos e a tabela; Recordes e Anotações são sempre all-time.
+`/api/history` também retorna `previous_total_kwh`/`previous_total_brl`
+(mesma duração, período imediatamente anterior) pra mostrar "▲ 12% a mais
+que no período anterior" — quando o período anterior é zero (ex.: antes da
+usina ligar), a comparação não aparece em vez de mostrar um percentual sem
+sentido.
+
+**Relatório em PDF**: botão único no topo da aba (`GET
+/api/history/report.pdf?range=X`), cobre geração + economia do mesmo
+período num só documento — gerado com `reportlab` (`webapp/report_pdf.py`),
+desenhado direto via `canvas` (sem HTML→PDF) pra evitar dependência de
+sistema tipo Cairo/Pango. Layout de página única, sem paginação: gráficos
+de barra mostram só os últimos 60 dias do período e a tabela só os últimos
+10 — pensado como demonstrativo simples, não um extrato completo.
+
+## Menu "Saúde da usina"
+
+Separado do Histórico depois que o usuário notou que "Histórico" estava
+acumulando duas naturezas diferentes de conteúdo: medida pura (quanto
+gerou) vs. diagnóstico (a usina está funcionando direito?). Ver "Princípio
+de design".
+
+| Seção | Título exibido | Fonte |
+|---|---|---|
+| Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` |
+
+`/api/history/inverters` **não precisou de nenhum dado novo do coletor**:
+deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
+`BRAZIL_TZ`, igual ao collector), por inversor — o mesmo princípio que já
+vale pro `daily_generation` (o último valor do dia é o total do dia), só
+que aplicado por inversor em vez do total da usina.
+
+**Ainda não implementado** (aprovado no mockup, mas depende de dado novo da
+Huawei — mexe exatamente na área que já causou o incidente de rate limit
+documentado em "Falhas de coleta e fallback seguro", então vale implementar
+com cautela e medição, não de uma vez):
+
+- **Eficiência da geração** (Performance Ratio, geração real vs. teórica) e
+  **impacto ambiental** (CO₂/carvão/árvores): precisam de
+  `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints nunca chamados
+  pelo coletor até hoje.
+- **Radiação medida vs. geração**: mesma dependência do item acima
+  (`radiation_intensity`).
+- **Comparativo ano a ano**: sem dado real possível ainda de qualquer forma
+  (usina ligou 13/07/2026, não completou 1 ano).
+- **Diagnóstico por string** (tensão por entrada MPPT da FoxESS): precisa
+  de variáveis novas no `device/history/query` da FoxESS
+  (`pv1Volt`/`pv2Volt`), nunca usadas pelo coletor.
 
 ## Consumo por unidade consumidora (Celesc)
 
@@ -210,194 +423,59 @@ traz — ou seja, um único upload já faz backfill de quase 1 ano.
   consulta externa. Fica como possível melhoria futura só se quisermos
   projetar o mês corrente antes da fatura chegar.
 
-## Design do painel
+## Princípio de design: fácil de ler pra qualquer idade
 
-O layout foi redesenhado (mockup iterado e aprovado em Artifact antes de ir
-pro código real): paleta validada pelo skill de dataviz (contraste + separação
-CVD), números nunca "vestem" a cor da série (identidade vem de um indicador
-ao lado, texto sempre em tinta neutra), tabular-nums pra alinhar dígitos, e
-tooltips em vez de legendas fixas pra explicar estados. O CSS é um sistema de
-tokens próprio (`--surface`, `--ink`, `--accent-*` etc. no `<style>` do
-`index.html`), sem framework de UI; os gráficos são Chart.js estilizado pra
-bater com os tokens.
+**Toda melhoria futura no painel — nova métrica, novo menu, novo alerta —
+precisa ser pensada pra alguém sem bagagem técnica (ex.: usuário idoso)
+conseguir olhar e entender o que está vendo, sem precisar perguntar.** Isso
+vale mais que qualquer preferência técnica de nomenclatura. Na prática:
 
-### Status por inversor
+- **Título em linguagem direta, não jargão técnico.** "A usina está
+  aproveitando bem o sol?" em vez de "Performance Ratio". O termo técnico
+  pode aparecer como legenda secundária menor, nunca como título principal.
+- **Resumo ao passar o mouse** em qualquer título de seção/métrica nova,
+  explicando em 1-2 frases o que aquele bloco analisa — antes mesmo de abrir
+  (componente `.tt`/`.tip` já existente em `templates/index.html`; usar a
+  variante `.tip-wide` quando o texto for mais longo que uma frase curta).
+- **Progressive disclosure**: seções recolhidas por padrão (mesmo padrão
+  visual da Central de Alertas — classes `.alert-card`/`.alert-toggle`/
+  `.alert-body`, reaproveitadas em vez de criar um componente novo), pra
+  tela abrir limpa em vez de uma parede de números. Só o resumo mais
+  importante do período fica aberto de cara.
+- **Nunca esconder atrás de um termo sem explicação**: todo número tem, no
+  mínimo, uma legenda curta dizendo o que ele significa (ex.: "kWh pra cada
+  kW instalado" em vez de só "kWh/kWp").
+- **Nome de menu reflete a pergunta que a pessoa está fazendo**, não a
+  origem técnica do dado. Foi por isso que "Qualidade da geração" virou seu
+  próprio menu, "Saúde da usina" — ver "Menu Saúde da usina".
 
-Cada inversor (Huawei, FoxESS) mostra um selo de status, calculado no
-`webapp` (`/api/inverters`) puramente pela idade do último ponto gravado —
-não existe campo dedicado no InfluxDB pra isso:
+Esse princípio nasceu da revisão da aba Histórico (mockup iterado e aprovado
+em Artifact — ver "Aba Histórico"), mas vale pra qualquer tela nova do
+projeto daqui pra frente.
 
-| Status | Condição |
-|---|---|
-| **Gerando** | ponto com menos de 15 min e potência > 0 |
-| **Online, sem geração** | ponto com menos de 15 min e potência = 0 (normal à noite) |
-| **Sem comunicação** | nenhum ponto nos últimos 15 min (3 ciclos de coleta de 5 min) |
+## Regra: selo "novo" por 5 dias
 
-"Sem comunicação" é o sinal mais próximo de "pode ter caído a energia/Wi-Fi/
-disjuntor" que dá pra obter sem depender de código de status do fabricante —
-pesquisamos os valores de `run_state`/`inverter_state` (Huawei) e `status`
-(FoxESS) e não achamos documentação oficial confiável; um mapeamento
-encontrado numa integração open-source pra FoxESS **contradisse** o que
-observamos ao vivo (status `3` apareceu com o inversor gerando normalmente),
-então preferimos não confiar nisso pra uma decisão real.
+**Toda aba, menu ou seção nova adicionada ao painel precisa ficar marcada
+como "novo" por 5 dias corridos a partir da data em que foi ao ar**, pra
+chamar atenção de quem já usa o painel no dia a dia e não ia notar a
+novidade sozinho. Depois desse prazo o selo some — não é permanente.
 
-Isso só funciona porque `collector/main.py` coleta cada inversor em um
-`try/except` isolado — uma falha na Huawei não impede a FoxESS de gravar no
-mesmo ciclo (e vice-versa).
+Mecanismo já implementado em `templates/index.html`, reaproveitar em vez de
+inventar de novo a cada novidade:
 
-### Outros campos
+- `NEW_FEATURES_SINCE`: objeto `{ "chave": "YYYY-MM-DD" }` com a data em que
+  cada novidade foi ao ar. **Toda vez que uma aba/menu/seção nova for
+  adicionada, registrar uma entrada aqui** com a data do dia.
+- `<span data-new-key="chave">` no HTML, no ponto exato onde o selo deve
+  aparecer (ao lado do nome do menu, ao lado do título da seção, etc.).
+- `paintNewBadges()` varre esses elementos e decide sozinho se o selo
+  aparece (chamado uma vez no carregamento, junto com `paintIconBadges()`)
+  — comparando a data registrada com a data atual, sem precisar de nenhum
+  lembrete manual pra tirar depois dos 5 dias.
 
-- **Temperatura do inversor**: Huawei via `getDevRealKpi` (campo
-  `temperature`), FoxESS via a variável `invTemperation`. A Huawei retornou
-  `0.0` em todos os testes até agora — pode ser normal pra esse modelo fora
-  de operação ativa, ou o campo pode não vir preenchido; ainda não
-  confirmamos como se comporta durante geração de pico.
-- **Detalhe do alarme**: quando `has_alarm` é `true`, tentamos extrair o
-  nome/descrição do primeiro alarme (`alarmName`/`name`/`desc`/`alarmCause`,
-  o que vier primeiro). **Não verificado contra um alarme real** — só
-  testamos com a lista vazia, e não há documentação dos nomes de campo
-  exatos. Ajustar quando um alarme de verdade aparecer nos logs.
-- **Pico de potência do dia + horário**, **bandeira tarifária vigente** (da
-  fatura mais recente, qualquer uma das 2 UCs) e **nascer/pôr do sol**
-  (Open-Meteo) — todos exibidos no card "Status do dia".
-
-### Falhas de coleta e fallback seguro
-
-Cada inversor é coletado num `try/except` isolado (ver "Status por
-inversor"), mas uma falha pontual na API não pode fazer o painel mentir sobre
-o que já foi gerado. Duas proteções em `collector/main.py`:
-
-- **`_carry_forward_day_kwh`**: geração diária só cresce, então quando a
-  consulta de um inversor falha nesse ciclo, o total "Gerado hoje"
-  (`daily_generation.generated_kwh`) usa o último `day_kwh` bem-sucedido
-  daquele inversor em vez de contar a contribuição dele como zero. Sem
-  sucesso ainda no dia (ex.: primeira tentativa do dia já falha), assume 0 —
-  mesmo comportamento de antes do inversor acordar. Estado em memória, por
-  inversor, resetado por dia.
-- **Alerta de falha constante**: cada ciclo grava um ponto
-  `collector_health` (tag `inverter`, campos `consecutive_failures` e
-  `last_error`) — sucesso zera o contador, falha incrementa. A partir de 2
-  falhas seguidas (`FAILURE_ALERT_THRESHOLD`, ~10 min de falha real, não 1
-  blip isolado) o coletor loga como `ERROR` e o webapp expõe o contador via
-  `/api/inverters`, virando alerta na Central de Alertas (ver tabela abaixo).
-  Isso é gravado mesmo se os dois inversores falharem no mesmo ciclo — é
-  justamente aí que o alerta mais importa.
-
-**Caso real que motivou isso** (2026-07-16): `getAlarmList` da Huawei tem um
-limite de taxa mais restrito que os outros endpoints (ver Fontes de dados
-oficiais), e falhava de forma determinística em 2 a cada 3 ciclos — cada
-falha zerava a contribuição da Huawei no total do dia, fazendo "Gerado hoje"
-cair momentaneamente. A causa raiz foi resolvida desacoplando o polling de
-alarme (roda a cada 900s, isolado — uma falha nele não derruba mais
-`power_kw`/`day_kwh` do ciclo); o fallback acima é a camada de segurança
-que garante que qualquer falha residual, nesse ou em qualquer outro endpoint,
-nunca faz o total regredir.
-
-### Central de alertas
-
-Accordion no topo do Dashboard (fechado por padrão, com contador de alertas
-ativos no badge) que resume tudo que merece atenção. Quais alertas existem
-não tem estado próprio: a lista é recalculada do zero a cada atualização
-(30s) a partir dos mesmos endpoints que já alimentam o resto do dashboard —
-se uma condição deixa de existir, o alerta correspondente some sozinho na
-atualização seguinte (o único estado guardado no cliente é o de "lido", ver
-abaixo):
-
-| Alerta | Origem | Severidade |
-|---|---|---|
-| Inversor sem comunicação | `/api/inverters` → `status == "sem_comunicacao"` | crítico |
-| Falha constante ao consultar a API do inversor (≥2x seguidas) | `/api/inverters` → `consecutive_failures`/`last_error` | atenção |
-| Temperatura do inversor acima do limiar | `/api/inverters` → `temperature_c` | atenção |
-| Bandeira amarela/vermelha ativa | `/api/day-status` → `bandeira` | atenção |
-| Geração do dia ≥10% abaixo da média da semana | `/api/summary` (hoje) vs. `/api/history?range=semana` (média) | informativo |
-
-O limiar de temperatura (`TEMP_THRESHOLD_C = 65`, em `templates/index.html`)
-é **ilustrativo** — não validamos contra a doc oficial dos modelos exatos
-(SIW300H-3K / SIW200G-5K), só pesquisa geral de mercado (ver pendências).
-
-Cada alerta tem um botão "Marcar como lida", que some com ele da lista e do
-contador do badge. A marcação vive em `sessionStorage` (chave por tipo de
-alerta, ex. `bandeira:amarela`), então dura só pro acesso atual — se fechar a
-aba/navegador e abrir de novo, alertas cuja condição ainda esteja ativa
-voltam a aparecer como não lidos. Isso é intencional: marcar como lida serve
-pra não ficar repetindo o mesmo aviso na mesma visita, não pra silenciar a
-condição de vez.
-
-### Aba Histórico
-
-Reformulada (mockup iterado e aprovado em Artifact, com o usuário pedindo
-explicitamente títulos legíveis pra qualquer idade — ver "Princípio de
-design"). Cada métrica é uma seção recolhível independente (reaproveita
-`.alert-card`/`.alert-toggle`/`.alert-body` da Central de Alertas, com
-`overflow: visible` numa classe extra `.hist-collapsible` — o card de
-alerta original usa `overflow: hidden`, que cortava o tooltip; ver
-`initHistoricoTab()` em `templates/index.html`):
-
-| Seção | Título exibido | Fonte |
-|---|---|---|
-| Quanto gerou | "☀ Quanto sua usina gerou" | `/api/history` — aberta por padrão |
-| Quanto economizou | "💰 Quanto você economizou" | `/api/history` (mesmo campo `valor_estimado_brl` de sempre, agora com bloco próprio em vez de escondido atrás do toggle Gerado/Economia) |
-| Recordes | "🏆 Seus melhores dias e meses" | `/api/history/records` — melhor dia, melhor mês (`aggregateWindow(every: 1mo)`), maior potência já vista — sempre desde que a usina ligou, independe do período selecionado |
-| Anotações | "📌 Anotações sobre eventos importantes" | `POST`/`GET /api/annotations` — 1 nota por dia (gravar de novo no mesmo dia sobrescreve), measurement `annotation` dedicado |
-
-O seletor de período (Semana/Mês/Ano, no topo da aba) atualiza os 2
-primeiros blocos e a tabela; Recordes e Anotações são sempre all-time.
-`/api/history` também retorna `previous_total_kwh`/`previous_total_brl`
-(mesma duração, período imediatamente anterior) pra mostrar "▲ 12% a mais
-que no período anterior" — quando o período anterior é zero (ex.: antes da
-usina ligar), a comparação não aparece em vez de mostrar um percentual sem
-sentido.
-
-**Relatório em PDF**: botão único no topo da aba (`GET
-/api/history/report.pdf?range=X`), cobre geração + economia do mesmo
-período num só documento — gerado com `reportlab` (`webapp/report_pdf.py`),
-desenhado direto via `canvas` (sem HTML→PDF) pra evitar dependência de
-sistema tipo Cairo/Pango. Layout de página única, sem paginação: gráficos
-de barra mostram só os últimos 60 dias do período e a tabela só os últimos
-10 — pensado como demonstrativo simples, não um extrato completo.
-
-### Menu "Saúde da usina"
-
-Separado do Histórico depois que o usuário notou que "Histórico" estava
-acumulando duas naturezas diferentes de conteúdo: medida pura (quanto
-gerou) vs. diagnóstico (a usina está funcionando direito?). Ver "Princípio
-de design".
-
-| Seção | Título exibido | Fonte |
-|---|---|---|
-| Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` |
-
-`/api/history/inverters` **não precisou de nenhum dado novo do coletor**:
-deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
-`BRAZIL_TZ`, igual ao collector), por inversor — o mesmo princípio que já
-vale pro `daily_generation` (o último valor do dia é o total do dia), só
-que aplicado por inversor em vez do total da usina.
-
-**Ainda não implementado** (aprovado no mockup, mas depende de dado novo da
-Huawei — mexe exatamente na área que já causou o incidente de rate limit
-documentado em "Falhas de coleta e fallback seguro", então vale implementar
-com cautela e medição, não de uma vez):
-
-- **Eficiência da geração** (Performance Ratio, geração real vs. teórica) e
-  **impacto ambiental** (CO₂/carvão/árvores): precisam de
-  `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints nunca chamados
-  pelo coletor até hoje.
-- **Radiação medida vs. geração**: mesma dependência do item acima
-  (`radiation_intensity`).
-- **Comparativo ano a ano**: sem dado real possível ainda de qualquer forma
-  (usina ligou 13/07/2026, não completou 1 ano).
-- **Diagnóstico por string** (tensão por entrada MPPT da FoxESS): precisa
-  de variáveis novas no `device/history/query` da FoxESS
-  (`pv1Volt`/`pv2Volt`), nunca usadas pelo coletor.
-
-### Linha de média nos gráficos
-
-Os gráficos "Geração diária" (Dashboard e Histórico) mostram uma linha
-tracejada vermelha com a média do período selecionado (diária pra
-semana/mês, mensal pro ano), num segundo dataset do Chart.js sobreposto às
-barras. O valor fica sempre visível abaixo do total do período, e passar o
-mouse em qualquer barra mostra a média junto no tooltip (mesmo índice do
-eixo X, `interaction.mode: "index"`).
+Exemplos já em uso: o menu "Saúde da usina" (`nav-saude`) e o clima
+recalculado nas horas de sol (`clima-horas-de-sol`), os dois adicionados em
+2026-07-16 — ver "Menu Saúde da usina" e "Status do dia: clima e previsão".
 
 ## Estrutura do projeto
 
@@ -423,21 +501,21 @@ eixo X, `interaction.mode: "index"`).
 | `GET /` | Página do dashboard |
 | `GET /api/summary` | KPIs atuais: potência, geração/economia do dia, pico do dia + horário, status |
 | `GET /api/inverters` | Potência/geração/temperatura/status (gerando, online sem geração, sem comunicação) por inversor, + `consecutive_failures`/`last_error` da coleta |
-| `GET /api/day-status` | Status do dia: clima, sol, alarme (+ detalhe), geração, bandeira vigente |
+| `GET /api/day-status` | Status do dia: clima (recalculado nas horas de sol), irradiância, nuvens por hora, sol, alarme (+ detalhe), geração, bandeira vigente |
 | `GET /api/history?range=semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) e `previous_total_kwh`/`previous_total_brl` do período anterior |
 | `GET /api/history/records` | Recordes all-time: melhor dia, melhor mês, maior potência já vista |
 | `GET /api/history/inverters?range=X` | Geração diária por inversor (Huawei/FoxESS), derivada do `inverter_status` já coletado |
 | `GET /api/history/report.pdf?range=X` | Relatório em PDF (geração + economia do período) pra download |
 | `POST /api/annotations` | Grava uma anotação (`date`, `note`) — 1 por dia, sobrescreve se já existir |
 | `GET /api/annotations?range=X` | Lista anotações do período, mais recente primeiro |
-| `GET /api/forecast` | Previsão do tempo 5 dias (Open-Meteo, sem API key) |
+| `GET /api/forecast` | Previsão do tempo 5 dias (Open-Meteo, sem API key, mesmo cache de 2h do `/api/day-status`) |
 | `POST /api/consumption/upload` | Recebe fatura PDF da Celesc (multipart), extrai e grava no InfluxDB |
 | `GET /api/consumption/summary` | Resumo por UC (última fatura) + economia estimada |
 | `GET /api/consumption/history?uc=X` | Série histórica de consumo (kWh/R$) de uma UC |
 
 ## Pendências / próximos passos
 
-- [ ] Confirmar o formato real do `getAlarmList` da Huawei quando um alarme de verdade acontecer (ver "Design do painel")
+- [ ] Confirmar o formato real do `getAlarmList` da Huawei quando um alarme de verdade acontecer (ver "Outros campos")
 - [ ] Confirmar se a temperatura do inversor Huawei sai de `0.0` durante geração de pico
 - [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, hoje ilustrativo) contra a doc oficial do SIW300H-3K/SIW200G-5K (ver "Central de alertas")
 - [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura pós-13/07 chegar (ver "Consumo por unidade consumidora")
