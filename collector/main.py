@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -42,7 +43,7 @@ FAILURE_ALERT_THRESHOLD = 2
 # lenta (com folga sobre os 888s observados), desacoplada da coleta de potência/
 # energia — que nunca apresentou esse problema e continua a cada 300s.
 ALARM_POLL_INTERVAL_SECONDS = 900
-_alarm_cache: dict = {"checked_at": None, "has_alarm": False, "alarm_detail": None}
+_alarm_cache: dict = {"checked_at": None, "has_alarm": False, "alarm_detail": None, "alarm_raw": None}
 
 
 def _apply_daily_reset_guard(inverter: str, power_kw: float, day_kwh: float) -> float:
@@ -135,38 +136,47 @@ def _extract_alarm_detail(alarms: list[dict]) -> str | None:
     return "Alarme ativo"
 
 
-def _get_alarm_status(huawei: HuaweiClient, station_code: str) -> tuple[bool, str | None]:
+def _get_alarm_status(huawei: HuaweiClient, station_code: str) -> tuple[bool, str | None, list | None]:
     """Consulta getAlarmList numa cadência própria (ver ALARM_POLL_INTERVAL_SECONDS),
     bem mais lenta que o ciclo de coleta principal — e nunca deixa uma falha nessa
     consulta específica derrubar a coleta de potência/energia do ciclo (que não tem
     relação com esse endpoint). Fora da janela de consulta, ou se a tentativa falhar,
-    retorna o último status conhecido em vez de assumir "sem alarme"."""
+    retorna o último status conhecido em vez de assumir "sem alarme".
+
+    O 3º valor retornado (`alarm_raw`) é a lista crua de alarmes, sem nenhuma
+    extração — guardada (log + InfluxDB, ver `collect_once`) só pra quando um
+    alarme real acontecer dar pra confirmar o formato de verdade depois, sem
+    precisar forçar uma falha real pra testar (ver `_extract_alarm_detail`)."""
     now = time.monotonic()
     due = _alarm_cache["checked_at"] is None or (now - _alarm_cache["checked_at"]) >= ALARM_POLL_INTERVAL_SECONDS
     if not due:
-        return _alarm_cache["has_alarm"], _alarm_cache["alarm_detail"]
+        return _alarm_cache["has_alarm"], _alarm_cache["alarm_detail"], _alarm_cache["alarm_raw"]
 
     _alarm_cache["checked_at"] = now  # marca a tentativa antes de chamar, pra não martelar de novo no próximo ciclo se falhar
     try:
         alarms = huawei.get_alarm_list(station_code)
         _alarm_cache["has_alarm"] = len(alarms) > 0
         _alarm_cache["alarm_detail"] = _extract_alarm_detail(alarms)
+        _alarm_cache["alarm_raw"] = alarms if alarms else None
+        if alarms:
+            log.info("Alarme real recebido da Huawei, payload bruto: %s", alarms)
     except Exception:
         log.exception("Falha ao consultar getAlarmList (status de alarme mantido no ultimo valor conhecido)")
-    return _alarm_cache["has_alarm"], _alarm_cache["alarm_detail"]
+    return _alarm_cache["has_alarm"], _alarm_cache["alarm_detail"], _alarm_cache["alarm_raw"]
 
 
 def _collect_huawei(huawei: HuaweiClient, station_code: str, dev_dn: str) -> dict:
     huawei.login()
     station_kpi = huawei.get_station_real_kpi(station_code)[0]["dataItemMap"]
     dev_kpi = huawei.get_dev_real_kpi(dev_dn, HUAWEI_DEV_TYPE_ID)[0]["dataItemMap"]
-    has_alarm, alarm_detail = _get_alarm_status(huawei, station_code)
+    has_alarm, alarm_detail, alarm_raw = _get_alarm_status(huawei, station_code)
     return {
         "power_kw": dev_kpi.get("active_power") or 0.0,
         "day_kwh": dev_kpi.get("day_cap") or station_kpi.get("day_power") or 0.0,
         "temperature_c": dev_kpi.get("temperature"),
         "has_alarm": has_alarm,
         "alarm_detail": alarm_detail,
+        "alarm_raw": alarm_raw,
     }
 
 
@@ -270,6 +280,11 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
     )
     if huawei_data and huawei_data["alarm_detail"]:
         plant_point = plant_point.field("alarm_detail", huawei_data["alarm_detail"])
+    if huawei_data and huawei_data.get("alarm_raw"):
+        # Payload cru do getAlarmList, sem extração — guardado só pra confirmar
+        # o formato real na primeira vez que um alarme de verdade acontecer
+        # (ver _get_alarm_status). Não usado por nenhuma tela do painel hoje.
+        plant_point = plant_point.field("alarm_raw_json", json.dumps(huawei_data["alarm_raw"])[:4000])
     points.append(plant_point)
 
     points.append(

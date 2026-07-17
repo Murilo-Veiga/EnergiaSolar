@@ -364,7 +364,17 @@ condição de vez.
   nome/descrição do primeiro alarme (`alarmName`/`name`/`desc`/`alarmCause`,
   o que vier primeiro). **Não verificado contra um alarme real** — só
   testamos com a lista vazia, e não há documentação dos nomes de campo
-  exatos. Ajustar quando um alarme de verdade aparecer nos logs.
+  exatos.
+  **Captura pra análise futura (2026-07-17)**: em vez de só esperar passivamente
+  e ajustar `_extract_alarm_detail` na hora, `_get_alarm_status` (`collector/
+  main.py`) agora loga o payload cru do `getAlarmList` (`log.info`) e grava
+  ele inteiro (JSON, até 4000 chars) no campo `alarm_raw_json` do measurement
+  `plant_status` sempre que a lista vier não-vazia — decisão de esperar um
+  alarme real acontecer antes de ajustar o parser, mas monitorando o backend
+  nesse meio-tempo em vez de descobrir "ao vivo" quando acontecer. Consultar
+  com `from(bucket:"solar-home") |> range(start: -30d) |> filter(fn: (r) =>
+  r._measurement == "plant_status" and r._field == "alarm_raw_json")` daqui
+  a alguns dias pra ver se algum registro chegou.
 
 ### Linha de média nos gráficos
 
