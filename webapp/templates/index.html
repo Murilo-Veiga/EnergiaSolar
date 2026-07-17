@@ -11,6 +11,7 @@
     --page:      #0d0d0d;
     --surface:   #1a1a19;
     --surface-2: #212120;
+    --surface-3: #262624;
     --ink:       #ffffff;
     --ink-2:     #c3c2b7;
     --ink-muted: #898781;
@@ -49,6 +50,7 @@
   .icon-badge.size-nav { width: 27px; height: 27px; }
   .icon-badge.size-card { width: 32px; height: 32px; border-radius: 9px; }
   .icon-badge.size-alert { width: 28px; height: 28px; }
+  .icon-badge.size-fc { width: 26px; height: 26px; border-radius: 7px; }
   .icon-badge.blue  { background: rgba(57,135,229,0.14); color: var(--accent-blue); }
   .icon-badge.aqua  { background: rgba(25,158,112,0.14); color: var(--accent-aqua); }
   .icon-badge.green { background: rgba(12,163,12,0.13);  color: var(--good); }
@@ -189,9 +191,8 @@
   .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; }
   .status-pill .sw { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 
-  /* Bottom row */
-  .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .day-card { padding: 18px 20px; display: flex; flex-direction: column; justify-content: center; }
+  /* Status do dia — cartão único (fatos da usina + linha do tempo do clima) */
+  .day-card { padding: 18px 20px; }
   .day-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .day-card h3 { font-size: 13px; font-weight: 600; margin: 0; color: var(--ink-2); }
   .day-card .date { font-size: 12px; color: var(--ink-muted); }
@@ -201,11 +202,6 @@
   .day-grid .aux { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 3px; font-family: var(--font-data); }
   .hero-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .hero-line .aux { font-size: 12.5px; color: var(--ink-muted); }
-  .day-extra { display: flex; gap: 26px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .day-extra-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
-  .day-extra-item .l { color: var(--ink-muted); }
-  .day-extra-item .v { color: var(--ink-2); font-weight: 600; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
-  .day-extra-item[hidden] { display: none; }
   .sparkline-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
   .sparkline-box[hidden] { display: none; }
   .sparkline-label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 8px; }
@@ -219,19 +215,28 @@
     padding: 1.5px 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
   }
 
-  .forecast-card { padding: 18px 20px; }
-  .forecast-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 14px; color: var(--ink-2); }
-  .fc-strip { display: flex; gap: 8px; align-items: stretch; }
-  .fc-day { flex: 1; text-align: center; background: var(--surface-2); border-radius: 8px; padding: 12px 8px 10px; display: flex; flex-direction: column; }
-  .fc-day .d { font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
-  .fc-day .ic { font-size: 18px; margin: 6px 0 4px; }
-  .fc-day .cond { font-size: 10px; color: var(--ink-2); line-height: 1.25; min-height: 25px; padding: 0 2px; }
-  .fc-day .fc-stats { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; display: flex; flex-direction: column; gap: 4px; }
-  .fc-day .rad { font-size: 10px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
-  .fc-day .rad .unit { font-size: 8px; color: var(--ink-muted); }
-  .fc-day .rad-meter { height: 3px; background: var(--surface); border-radius: 2px; overflow: hidden; margin: 3px 1px 0; }
-  .fc-day .rad-meter i { display: block; height: 100%; background: var(--ink-muted); border-radius: 2px; }
-  .fc-day .t { font-size: 12px; color: var(--ink-2); font-weight: 650; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  /* Linha do tempo (hoje + próximos 4 dias) dentro do card "Status do dia" —
+     "hoje" usa o clima recalculado só nas horas de sol (ver README), os
+     outros usam o resumo bruto do dia inteiro; o destaque visual deixa essa
+     diferença de fonte visível em vez de escondida. */
+  .day-timeline { display: flex; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .tl-day { flex: 1; text-align: center; background: var(--surface-2); border-radius: 8px; padding: 12px 8px 10px; display: flex; flex-direction: column; border: 1px solid transparent; position: relative; }
+  .tl-day.today { background: var(--surface-3); border-color: var(--accent-blue); }
+  .tl-day.today::before {
+    content: "HOJE"; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--accent-blue); color: #fff; font-size: 8.5px; font-weight: 700; letter-spacing: .04em;
+    padding: 2px 7px; border-radius: 5px;
+  }
+  .tl-day .d { font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
+  .tl-day .icon-badge { margin: 7px auto 5px; }
+  .tl-day .cond { font-size: 10px; color: var(--ink-2); line-height: 1.25; min-height: 25px; padding: 0 2px; }
+  .tl-day .sun-note { font-size: 9px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 2px; }
+  .tl-day .fc-stats { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; display: flex; flex-direction: column; gap: 4px; }
+  .tl-day .rad { font-size: 10px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .tl-day .rad .unit { font-size: 8px; color: var(--ink-muted); }
+  .tl-day .rad-meter { height: 3px; background: var(--surface); border-radius: 2px; overflow: hidden; margin: 3px 1px 0; }
+  .tl-day .rad-meter i { display: block; height: 100%; background: var(--ink-muted); border-radius: 2px; }
+  .tl-day .t { font-size: 12px; color: var(--ink-2); font-weight: 650; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
 
   /* Histórico table */
   .hist-table { width: 100%; border-collapse: collapse; }
@@ -408,50 +413,35 @@
           <div class="chart-caption" id="dash-caption"></div>
         </div>
 
-        <div class="bottom-row">
-          <div class="card day-card">
-            <div class="head">
-              <h3>Status do dia</h3>
-              <span class="date" id="day-status-date">--</span>
+        <div class="card day-card">
+          <div class="head">
+            <h3>Status do dia<span data-new-key="clima-horas-de-sol"></span></h3>
+            <span class="date" id="day-status-date">--</span>
+          </div>
+          <div class="day-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div>
+              <div class="l">Situação</div>
+              <span class="status-pill" id="day-status-pill"><span class="sw"></span><span class="label">--</span></span>
+              <div id="day-status-alarm-detail" style="font-size:10.5px;color:var(--ink-muted);margin-top:4px"></div>
             </div>
-            <div class="day-grid">
-              <div>
-                <div class="l" id="day-status-weather-label">Clima</div>
-                <div class="v" style="font-family:var(--font-ui)"><span id="day-status-weather">--</span><span data-new-key="clima-horas-de-sol"></span></div>
-              </div>
-              <div>
-                <div class="l">Situação</div>
-                <span class="status-pill" id="day-status-pill"><span class="sw"></span><span class="label">--</span></span>
-                <div id="day-status-alarm-detail" style="font-size:10.5px;color:var(--ink-muted);margin-top:4px"></div>
-              </div>
-              <div>
-                <div class="l">Gerado</div>
-                <div class="v" id="day-status-generated">--</div>
-              </div>
+            <div>
+              <div class="l">Gerado hoje</div>
+              <div class="v" id="day-status-generated">--</div>
             </div>
-            <div class="day-extra">
-              <div class="day-extra-item tt" id="day-bandeira" hidden>
-                <span class="flag-dot" id="day-bandeira-dot"></span>
-                <span class="l">Bandeira</span> <span class="v" id="day-bandeira-name">--</span>
+            <div id="day-bandeira" hidden>
+              <div class="l">Bandeira</div>
+              <div class="v tt"><span class="flag-dot" id="day-bandeira-dot"></span> <span id="day-bandeira-name">--</span>
                 <span class="tip" id="day-bandeira-tip"></span>
               </div>
-              <div class="day-extra-item">
-                <span class="l">Sol</span> <span class="v" id="day-sun">--</span>
-              </div>
-              <div class="day-extra-item" id="day-radiation" hidden>
-                <span class="l">Irradiância</span> <span class="v" id="day-radiation-value">--</span>
-              </div>
-            </div>
-            <div class="sparkline-box" id="day-cloud-box" hidden>
-              <div class="sparkline-label">Nuvens ao longo do dia</div>
-              <div id="day-cloud-sparkline"></div>
-              <div class="sparkline-caption"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div>
             </div>
           </div>
 
-          <div class="card forecast-card">
-            <h3>Previsão (5 dias)</h3>
-            <div class="fc-strip" id="forecast-cards"></div>
+          <div class="day-timeline" id="day-timeline"></div>
+
+          <div class="sparkline-box" id="day-cloud-box" hidden>
+            <div class="sparkline-label">Nuvens ao longo do dia</div>
+            <div id="day-cloud-sparkline"></div>
+            <div class="sparkline-caption"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div>
           </div>
         </div>
       </div>
@@ -805,6 +795,11 @@
         plug: `<path d="M9 2.5v4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 2.5v4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 7.7h10v4a5 5 0 0 1-10 0v-4Z" fill="currentColor"/><path d="M12 16.7v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
         target: `<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>`,
         shield: `<path d="M12 2.5 L19.5 5.5 V11.5 C19.5 16.5 16.3 20 12 21.5 C7.7 20 4.5 16.5 4.5 11.5 V5.5 Z" fill="currentColor"/>`,
+        cloud: `<path d="M7.5 18.5a4.3 4.3 0 0 1-.4-8.58 5.4 5.4 0 0 1 10.4-1.9 3.9 3.9 0 0 1-.7 10.48Z" fill="currentColor"/>`,
+        drizzle: `<path d="M7.5 14.5a4.3 4.3 0 0 1-.4-8.58 5.4 5.4 0 0 1 10.4-1.9 3.9 3.9 0 0 1-.7 10.48Z" fill="currentColor"/>` +
+          `<line x1="8" y1="17.5" x2="7" y2="21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` +
+          `<line x1="12" y1="17.5" x2="11" y2="21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` +
+          `<line x1="16" y1="17.5" x2="15" y2="21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
       }[name] || "";
       return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">${body}</svg>`;
     }
@@ -1340,14 +1335,14 @@
       }
     }
 
+    // Só os fatos da usina (situação, geração, bandeira) — o clima de hoje
+    // (ícone, sol, irradiância, nuvens) mora na linha do tempo, alimentada
+    // por refreshForecast(), pra não duplicar a mesma informação em 2 lugares.
     async function refreshDayStatus() {
       const r = await fetch("/api/day-status");
       const d = await r.json();
 
       document.getElementById("day-status-date").textContent = d.date ?? "--";
-      document.getElementById("day-status-weather").textContent = d.weather_daylight ?? d.weather ?? "--";
-      document.getElementById("day-status-weather-label").textContent =
-        (d.weather_daylight && d.sunrise && d.sunset) ? `Clima (${d.sunrise}–${d.sunset})` : "Clima";
       document.getElementById("day-status-generated").innerHTML =
         d.generated_kwh !== null ? `${fmtNum(d.generated_kwh)} <span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-ui)">kWh</span>` : "--";
 
@@ -1380,24 +1375,6 @@
             : "";
       } else {
         bandeiraItem.hidden = true;
-      }
-
-      document.getElementById("day-sun").textContent = (d.sunrise && d.sunset) ? `${d.sunrise} – ${d.sunset}` : "--";
-
-      const radItem = document.getElementById("day-radiation");
-      if (d.solar_radiation_mj_m2 !== null && d.solar_radiation_mj_m2 !== undefined) {
-        radItem.hidden = false;
-        document.getElementById("day-radiation-value").textContent = `${fmtNum(d.solar_radiation_mj_m2)} MJ/m²`;
-      } else {
-        radItem.hidden = true;
-      }
-
-      const cloudBox = document.getElementById("day-cloud-box");
-      if (d.cloudcover_hourly && d.sunrise && d.sunset) {
-        cloudBox.hidden = false;
-        renderCloudSparkline(d.cloudcover_hourly, d.sunrise, d.sunset);
-      } else {
-        cloudBox.hidden = true;
       }
     }
 
@@ -1587,33 +1564,54 @@
       body.hidden = !isOpen;
     });
 
-    const RATING_ICON = { bom: "☀️", moderado: "⛅", ruim: "🌧️" };
+    const RATING_ICON_NAME = { bom: "sun", moderado: "cloud", ruim: "drizzle" };
+    const RATING_BADGE_COLOR = { bom: "gold", moderado: "blue", ruim: "blue" };
     // Escala fixa até 20 MJ/m² (dia de céu limpo típico na região) — dá contexto
     // comparável entre os dias em vez de reescalar pelo máximo da semana.
     const radiationMeterPct = (mj) => Math.max(4, Math.min(100, Math.round((mj / 20) * 100)));
 
+    // Renderiza a linha do tempo dentro do card "Status do dia": hoje
+    // (destacado, clima recalculado só nas horas de sol) + próximos 4 dias
+    // (resumo bruto do dia inteiro). Também dispara o gráfico de nuvens de
+    // hoje — tudo isso vem do mesmo /api/forecast (cache de 2h no backend),
+    // então não duplica a consulta que /api/day-status já fazia.
     async function refreshForecast() {
       const r = await fetch("/api/forecast");
       const days = await r.json();
 
-      const container = document.getElementById("forecast-cards");
+      const container = document.getElementById("day-timeline");
       container.innerHTML = "";
       days.forEach((d, i) => {
-        const icon = RATING_ICON[d.rating] ?? "⛅";
+        const isToday = i === 0;
+        const rating = isToday ? (d.rating_daylight ?? d.rating) : d.rating;
+        const color = RATING_BADGE_COLOR[rating] ?? "blue";
+        const iconName = RATING_ICON_NAME[rating] ?? "cloud";
         const weekday = new Date(d.date + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
-        const label = i === 0 ? "Hoje" : weekday.charAt(0).toUpperCase() + weekday.slice(1);
+        const label = isToday ? "Hoje" : weekday.charAt(0).toUpperCase() + weekday.slice(1);
+        const condition = isToday ? (d.weather_daylight ?? d.weather) : d.weather;
         const el = document.createElement("div");
-        el.className = "fc-day";
+        el.className = `tl-day${isToday ? " today" : ""}`;
         el.innerHTML = `
           <div class="d">${label}</div>
-          <div class="ic">${icon}</div>
-          <div class="cond">${d.weather}</div>
+          <span class="icon-badge ${color} size-fc">${iconSvg(iconName, 15, ICON_BG[color])}</span>
+          <div class="cond">${condition}</div>
+          ${isToday && d.sunrise && d.sunset ? `<div class="sun-note">${d.sunrise}–${d.sunset}</div>` : ""}
           <div class="fc-stats">
             <div class="rad">${fmtNum(d.solar_radiation_mj_m2)} <span class="unit">MJ/m²</span><div class="rad-meter"><i style="width:${radiationMeterPct(d.solar_radiation_mj_m2)}%"></i></div></div>
             <div class="t">${fmtNum(d.temp_max, 0)}°/${fmtNum(d.temp_min, 0)}°</div>
           </div>
         `;
         container.appendChild(el);
+
+        if (isToday) {
+          const cloudBox = document.getElementById("day-cloud-box");
+          if (d.cloudcover_hourly && d.sunrise && d.sunset) {
+            cloudBox.hidden = false;
+            renderCloudSparkline(d.cloudcover_hourly, d.sunrise, d.sunset);
+          } else {
+            cloudBox.hidden = true;
+          }
+        }
       });
     }
 

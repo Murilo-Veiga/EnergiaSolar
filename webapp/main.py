@@ -146,10 +146,16 @@ def _forecast_days():
             codes_in_daylight = [c for h, c in enumerate(hour_codes) if _hour_in_daylight(h, sunrise, sunset)]
             if codes_in_daylight:
                 daylight_code = max(set(codes_in_daylight), key=codes_in_daylight.count)
-                daylight_desc, _ = WMO_CODES.get(daylight_code, ("Desconhecido", "moderado"))
+                daylight_desc, daylight_rating = WMO_CODES.get(daylight_code, ("Desconhecido", "moderado"))
                 day["weather_daylight"] = daylight_desc
+                # rating (usado pro ícone) precisa acompanhar a mesma recalculação do
+                # texto — senão o ícone mostra o resumo de 24h enquanto o texto mostra
+                # só as horas de sol, podendo contradizer um ao outro (mesma classe de
+                # bug que motivou o weather_daylight, ver README > "Status do dia").
+                day["rating_daylight"] = daylight_rating
             else:
                 day["weather_daylight"] = description
+                day["rating_daylight"] = day["rating"]
             day["cloudcover_hourly"] = hour_clouds
 
         days.append(day)
@@ -242,9 +248,10 @@ def summary():
     status = "alerta" if has_alarm else ("online" if is_online else "pendente")
 
     peak_power_kw = peak_power_at = None
+    start_of_day_brazil = datetime.now(BRAZIL_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
     flux_peak = f'''
     from(bucket: "{INFLUX_BUCKET}")
-      |> range(start: -24h)
+      |> range(start: {start_of_day_brazil.astimezone(timezone.utc).isoformat()})
       |> filter(fn: (r) => r._measurement == "plant_status" and r._field == "instantaneous_power_kw" and r.plant_id == "{PLANT_TAG}")
     '''
     for table in query_api.query(flux_peak):
@@ -514,7 +521,7 @@ def history_report_pdf(range: str = "mes"):
 
     pdf_bytes = build_history_report_pdf(
         period_label=RANGE_LABEL_PDF.get(range, "Período selecionado"),
-        generated_at=datetime.now(),
+        generated_at=datetime.now(BRAZIL_TZ),
         rows=rows,
         total_kwh=data["total_kwh"],
         total_brl=data["total_brl"] or 0.0,
@@ -547,11 +554,20 @@ def history_inverters(range: str = "mes"):
     """Geração diária por inversor. Não precisa de nenhum dado novo do
     coletor: deriva do último inverter_status.day_kwh de cada dia (mesma
     lógica de "o último valor do dia é o total do dia" que já vale pro
-    daily_generation), só que por inversor em vez do total da usina."""
-    days = RANGE_DAYS.get(range, 30)
+    daily_generation), só que por inversor em vez do total da usina.
+
+    range="dia" usa a meia-noite BRT de hoje como início em vez da janela
+    rolante de -1d: com -1d, o último ponto de ontem (gravado ~23:55) cai
+    dentro da janela e entra como um dia extra, fazendo a soma dobrar
+    ontem-inteiro + hoje-parcial em vez de só hoje."""
+    if range == "dia":
+        range_start = datetime.now(BRAZIL_TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
+    else:
+        days = RANGE_DAYS.get(range, 30)
+        range_start = f"-{days}d"
     flux = f'''
     from(bucket: "{INFLUX_BUCKET}")
-      |> range(start: -{days}d)
+      |> range(start: {range_start})
       |> filter(fn: (r) => r._measurement == "inverter_status" and r._field == "day_kwh" and r.plant_id == "{PLANT_TAG}")
       |> sort(columns: ["_time"])
     '''

@@ -263,6 +263,18 @@ condição de vez.
 
 ### Status do dia: clima e previsão
 
+- **Cartão único, em linha do tempo** (redesenhado em 2026-07-17: mockup com 4
+  opções iterado e aprovado em Artifact, a pedido do usuário — o layout antigo
+  dividia clima/situação/geração numa grade de 3 colunas e repetia o clima de
+  hoje de novo numa coluna própria do card "Previsão", separado ao lado).
+  Hoje o card "Status do dia" tem 2 partes:
+  - uma tira fina no topo só com os fatos **da usina** (situação, geração do
+    dia, bandeira tarifária vigente);
+  - uma **linha do tempo** de 5 dias (hoje + próximos 4), onde "hoje" vem
+    destacado (badge "HOJE", borda de cor) por ser o único recalculado só nas
+    horas de sol — os outros 4 usam o resumo bruto do dia inteiro da
+    Open-Meteo. Isso elimina a duplicação: o clima de hoje só aparece uma vez,
+    como o primeiro item da própria linha do tempo.
 - **Clima recalculado só nas horas de sol**: a Open-Meteo entrega um
   `weathercode` diário que resume as 24h do dia (madrugada e noite incluídas,
   onde nuvem não afeta geração nenhuma) — descoberto ao investigar por que o
@@ -270,23 +282,29 @@ condição de vez.
   da usina. `_forecast_days()` em `webapp/main.py` busca também
   `hourly=weathercode,cloudcover` na mesma chamada e, só pro dia de hoje,
   recalcula o resumo (`weather_daylight`) usando a moda do `weathercode`
-  **apenas entre nascer e pôr do sol** (`_hour_in_daylight`). O card mostra
-  esse valor recalculado (com o horário da janela ao lado do rótulo "Clima"),
-  a irradiância do dia (`solar_radiation_mj_m2`, já vinha na chamada mas não
-  aparecia em lugar nenhum) e um gráfico de nuvens hora a hora com a janela
-  de sol destacada — pra deixar visível *por que* o resumo pode divergir do
-  clima de "senso comum" de quem olhou pra fora hoje.
+  **apenas entre nascer e pôr do sol** (`_hour_in_daylight`) — e, desde
+  2026-07-17, também recalcula a **favorabilidade** (`rating_daylight`) do
+  mesmo jeito, porque o ícone do tile "Hoje" usava o `rating` do dia inteiro e
+  podia contradizer o texto recalculado (ex.: texto "Principalmente limpo"
+  com ícone de nuvem) — mesma classe de bug que motivou o `weather_daylight`
+  original. O tile "Hoje" mostra o valor recalculado (com o horário da janela
+  de sol logo abaixo), a irradiância do dia (`solar_radiation_mj_m2`) e um
+  gráfico de nuvens hora a hora com a janela de sol destacada — pra deixar
+  visível *por que* o resumo pode divergir do clima de "senso comum" de quem
+  olhou pra fora hoje.
+- **Ícones por badge, não mais emoji**: a linha do tempo usa o mesmo sistema
+  de `iconSvg`/`.icon-badge` do resto do painel (ver "Ícones" acima) em vez do
+  emoji fixo (`☀️`/`⛅`/`🌧️`) que o card "Previsão" antigo usava — mapeado a
+  partir do `rating` (`bom`→sol dourado, `moderado`/`ruim`→nuvem azul).
 - **Cache de 2h na consulta à Open-Meteo**: o frontend chama `/api/day-status`
-  a cada 30s e `/api/forecast` a cada 30min — sem cache isso batia na
-  Open-Meteo ao vivo ~2900x/dia pra um dado que o modelo deles só atualiza a
-  cada poucas horas. `_forecast_days()` guarda a resposta numa variável de
-  módulo (`_forecast_cache`) por até `_FORECAST_CACHE_TTL` (2h) antes de
-  consultar de novo — cache em memória simples, suficiente porque o webapp
-  roda como 1 processo uvicorn só (sem múltiplos workers). Reseta sozinho
-  a cada restart do container (só implica 1 consulta a mais logo depois).
-- **Pico de potência do dia + horário**, **bandeira tarifária vigente** (da
-  fatura mais recente, qualquer uma das 2 UCs) e **nascer/pôr do sol**
-  (Open-Meteo) — todos exibidos no mesmo card "Status do dia".
+  a cada 30s (fatos da usina) e `/api/forecast` a cada 30min (linha do tempo
+  inteira, incluindo o tile de hoje) — sem cache isso bateria na Open-Meteo ao
+  vivo pra um dado que o modelo deles só atualiza a cada poucas horas.
+  `_forecast_days()` guarda a resposta numa variável de módulo
+  (`_forecast_cache`) por até `_FORECAST_CACHE_TTL` (2h) antes de consultar de
+  novo — cache em memória simples, suficiente porque o webapp roda como 1
+  processo uvicorn só (sem múltiplos workers). Reseta sozinho a cada restart
+  do container (só implica 1 consulta a mais logo depois).
 
 ### Outros campos
 
@@ -378,11 +396,15 @@ de design".
 deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
 `BRAZIL_TZ`, igual ao collector), por inversor — o mesmo princípio que já
 vale pro `daily_generation` (o último valor do dia é o total do dia), só
-que aplicado por inversor em vez do total da usina. O seletor
-Dia/Semana/Mês/Ano usa o mesmo `RANGE_DAYS` (janela corrida, não
-alinhada ao calendário) do resto do painel — com pouco histórico
-acumulado (usina ligou 13/07/2026), os 4 períodos podem mostrar o mesmo
-resultado até existir mais de ~7 dias de dado.
+que aplicado por inversor em vez do total da usina. Semana/Mês/Ano usam o
+mesmo `RANGE_DAYS` (janela corrida, não alinhada ao calendário) do resto do
+painel — com pouco histórico acumulado (usina ligou 13/07/2026), esses 3
+períodos podem mostrar o mesmo resultado até existir mais de ~7 dias de
+dado. **Dia é exceção** (corrigido em 2026-07-17): usa a meia-noite BRT de
+hoje como início em vez de `-1d` rolante — com `-1d`, o último ponto de
+ontem (gravado ~23:55) caía dentro da janela e virava um dia extra na soma,
+fazendo "Contribuição real vs. esperada" (aba Saúde da usina) somar
+ontem-inteiro + hoje-parcial como se fosse só hoje.
 
 `/api/collector-health` também **não precisou de coleta nova**: o
 measurement `collector_health` já grava 1 ponto por ciclo (sucesso ou
@@ -598,17 +620,17 @@ buscar de novo).
 | **Gerado hoje** | último ponto de `daily_generation` (janela `-3d`) | **sim**, mas com até ~5min de atraso: o coletor só escreve o ponto zerado do novo dia no primeiro ciclo depois da virada — entre 00:00 e esse ciclo, o painel ainda mostra o total de ontem |
 | **Gerado hoje vs. ontem (▲/▼)** | `today_generated_kwh` − penúltimo ponto de `daily_generation` | correto mas pouco útil logo após meia-noite: mostra **"▼ 100%"** todo dia de madrugada (0 gerado ainda vs. o total de ontem) até o sol nascer — matematicamente certo, mas pode ler como alarme falso às 3h da manhã |
 | kWh/temperatura por inversor | último ponto de `inverter_status` (janela `-1h`) | sim, mesmo atraso de ~5min do item acima (mesmo guard de reset por inversor) |
-| **Pico hoje (kW + horário)** | máximo de `plant_status.instantaneous_power_kw` numa **janela rolante de 24h** (`range(start: -24h)`) | **não zera na virada** — é uma janela móvel, não "desde a meia-noite de hoje". Um pico de ontem à tarde continua aparecendo como "Pico hoje" por até 24h depois de ter acontecido, só sai da tela quando "envelhece" pra fora da janela. O rótulo diz "hoje", mas a lógica não é por dia-calendário. |
+| **Pico hoje (kW + horário)** | máximo de `plant_status.instantaneous_power_kw` desde a meia-noite local (`range(start: <meia-noite BRT de hoje>)`) | **sim** — corrigido em 2026-07-17 (era `range(start: -24h)`, janela rolante; um pico de ontem à tarde continuava aparecendo como "Pico hoje" até completar 24h) |
 | Situação / alarme | `plant_status.has_alarm` (janela `-1h`) | não é por dia, é "última hora" — comportamento correto pro que se propõe |
 | Bandeira tarifária | fatura mais recente | não é diário (é mensal), correto como está |
 | Clima / irradiância / nuvens | Open-Meteo, recalculado só nas horas de sol de hoje | sim, muda de dia porque a própria Open-Meteo já entrega por data |
 
-**Resumindo o achado principal deste item**: só o "Pico hoje" tem uma
+**Resumindo o achado principal deste item**: só o "Pico hoje" tinha uma
 inconsistência real entre o nome e o comportamento — os demais "hoje" zeram
 corretamente na virada (com uma folga de até ~5min, que é o próprio
-intervalo de coleta, não um bug). Trocar `range(start: -24h)` por um
-range calculado a partir da meia-noite local resolveria, mas fica registrado
-aqui como achado, não corrigido nesta auditoria.
+intervalo de coleta, não um bug). Corrigido em 2026-07-17: `/api/summary`
+agora calcula o range a partir da meia-noite BRT do dia corrente
+(`start_of_day_brazil`, `webapp/main.py`) em vez de `range(start: -24h)`.
 
 ### 3. Histórico vs. banco de dados
 
@@ -682,7 +704,7 @@ daqui 12 meses**:
 | Achado | Severidade | Ação sugerida |
 |---|---|---|
 | Clima/irradiância não é persistido | Alto (janela de oportunidade perdida todo dia) | Gravar 1 ponto/dia no InfluxDB com o que a Open-Meteo já retorna |
-| "Pico hoje" é janela rolante de 24h, não por dia-calendário | Médio (rótulo engana) | Trocar `range(start: -24h)` por range desde a meia-noite local |
+| ~~"Pico hoje" é janela rolante de 24h, não por dia-calendário~~ | ~~Médio~~ | **Corrigido em 2026-07-17** |
 | `refreshAlerts` duplica 3 chamadas que já existem | Baixo (desperdício, não incorreção) | Reaproveitar os fetches dos outros timers em vez de refazer |
 | "▼ 100% vs. ontem" todo início de manhã | Baixo (correto, mas pouco útil) | Considerar esconder o indicador antes do nascer do sol |
 | Timestamp inconsistente nos 3 primeiros dias de `daily_generation` | Baixo (não afeta nada visível hoje) | Só documentar (feito) — não vale reescrever dado histórico por causa disso |
