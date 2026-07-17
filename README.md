@@ -270,8 +270,27 @@ abaixo):
 | Geração do dia ≥10% abaixo da média da semana | `/api/summary` (hoje) vs. `/api/history?range=semana` (média) | informativo |
 
 O limiar de temperatura (`TEMP_THRESHOLD_C = 65`, em `templates/index.html`)
-é **ilustrativo** — não validamos contra a doc oficial dos modelos exatos
-(SIW300H-3K / SIW200G-5K), só pesquisa geral de mercado (ver pendências).
+segue **ilustrativo** — checado contra os manuais oficiais WEG (rebrand
+comercial da instaladora pro hardware Huawei/FoxESS) em 2026-07-17, mas eles
+não fecham a validação:
+
+- **SIW200G M050 (FoxESS, 5 kW)**, manual dedicado: faixa de temperatura
+  operacional **-25°C a +60°C**, com **derating a partir de 45°C** — e um
+  código de falha próprio (`Over Temp`) quando a temperatura ambiente
+  ultrapassa o limite.
+- **SIW300H M030 L1 (Huawei, 3 kW)**, catálogo da linha: faixa de temperatura
+  operacional **-25°C a +60°C** — sem valor de derating específico
+  publicado pra esse modelo no catálogo (existe pra outro modelo da linha,
+  SIW600/SIW500H HV: acima de 40°C, mas não vale extrapolar pro SIW300H
+  sem confirmação).
+- **Por que isso não valida o `65°C` direto**: os valores acima são
+  temperatura **ambiente** (onde o inversor está instalado), não a leitura
+  que a API expõe (`temperature` da Huawei, `invTemperation` da FoxESS) —
+  essa é quase certamente a temperatura **interna/do dissipador**, que roda
+  mais quente que o ambiente por autoaquecimento durante operação. Nenhum
+  dos dois manuais publica um limite pra essa leitura interna
+  especificamente. Falta ainda uma leitura real de pico (ver pendência
+  "temperatura Huawei sai de 0.0") pra cruzar com esses tetos ambiente.
 
 Cada alerta tem um botão "Marcar como lida", que some com ele da lista e do
 contador do badge. A marcação vive em `sessionStorage` (chave por tipo de
@@ -468,17 +487,13 @@ measurement `collector_health` já grava 1 ponto por ciclo (sucesso ou
 falha) desde sempre — ver "Falhas de coleta e fallback seguro" — só nunca
 tinha sido exposto num endpoint.
 
-**Ainda não implementado** (aprovado no mockup, mas depende de dado novo da
-Huawei — mexe exatamente na área que já causou o incidente de rate limit
-documentado em "Falhas de coleta e fallback seguro", então vale implementar
-com cautela e medição, não de uma vez):
+**Avaliado e descartado** (2026-07-17): Performance Ratio, geração teórica e
+impacto ambiental (CO₂/carvão/árvores) foram cogitados pra essa aba, mas
+decisão do usuário foi não implementar — números "bonitos, mas não úteis"
+na prática. Não reabrir essa análise em auditorias futuras.
 
-- **Eficiência da geração** (Performance Ratio, geração real vs. teórica) e
-  **impacto ambiental** (CO₂/carvão/árvores): precisam de
-  `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints nunca chamados
-  pelo coletor até hoje.
-- **Radiação medida vs. geração**: mesma dependência do item acima
-  (`radiation_intensity`).
+**Ainda não implementado**:
+
 - **Comparativo ano a ano**: sem dado real possível ainda de qualquer forma
   (usina ligou 13/07/2026, não completou 1 ano).
 - **Diagnóstico por string** (tensão/corrente por entrada MPPT): precisa de
@@ -753,11 +768,6 @@ daqui 12 meses**:
   resolver é barato (1 `Point` novo por dia no coletor ou no webapp,
   reaproveitando a mesma chamada que já existe) e o custo de não resolver só
   cresce quanto mais tempo passar sem começar a gravar.
-- **Performance Ratio, geração teórica, impacto ambiental** (`getKpiStationDay`
-  da Huawei): já mapeado como pendência em "Menu Saúde da usina" — vale
-  reforçar aqui que cada dia sem coletar isso é um dia que não dá mais pra
-  recuperar depois (a Huawei não garante manter esse histórico disponível
-  indefinidamente do lado dela).
 - **Tensão por string** (`pv1Volt`/`pv2Volt` da FoxESS): mesma lógica —
   pendência conhecida, mas diagnóstico de sombra/sujeira por fileira só
   funciona com histórico acumulado, então quanto antes começar a coletar,
@@ -769,8 +779,8 @@ daqui 12 meses**:
 |---|---|---|
 | ~~Clima/irradiância não é persistido~~ | ~~Alto~~ | **Corrigido em 2026-07-17** — ver "Arquivamento de clima/irradiância" |
 | ~~"Pico hoje" é janela rolante de 24h, não por dia-calendário~~ | ~~Médio~~ | **Corrigido em 2026-07-17** |
-| `refreshAlerts` duplica 3 chamadas que já existem | Baixo (desperdício, não incorreção) | Reaproveitar os fetches dos outros timers em vez de refazer |
-| "▼ 100% vs. ontem" todo início de manhã | Baixo (correto, mas pouco útil) | Considerar esconder o indicador antes do nascer do sol |
+| ~~`refreshAlerts` duplica 3 chamadas que já existem~~ | ~~Baixo~~ | **Corrigido em 2026-07-17** — reaproveita `lastSummary`/`lastInverters`/`lastDayStatus` dos outros timers |
+| ~~"▼ 100% vs. ontem" todo início de manhã~~ | ~~Baixo~~ | **Corrigido em 2026-07-17** — escondido antes do nascer do sol (`isBeforeSunrise()`) |
 | Timestamp inconsistente nos 3 primeiros dias de `daily_generation` | Baixo (não afeta nada visível hoje) | Só documentar (feito) — não vale reescrever dado histórico por causa disso |
 
 Nenhum desses itens foi corrigido nesta auditoria — ficou registrado pra
@@ -780,9 +790,8 @@ decidir prioridade com calma.
 
 - [ ] Confirmar o formato real do `getAlarmList` da Huawei quando um alarme de verdade acontecer (ver "Outros campos")
 - [ ] Confirmar se a temperatura do inversor Huawei sai de `0.0` durante geração de pico
-- [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, hoje ilustrativo) contra a doc oficial do SIW300H-3K/SIW200G-5K (ver "Central de alertas")
+- [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, ilustrativo) contra uma leitura real de pico — os manuais oficiais WEG só documentam o teto **ambiente** (60°C, derating a 45°C na FoxESS), não o campo interno que a API expõe (ver "Central de alertas")
 - [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura pós-13/07 chegar (ver "Consumo por unidade consumidora")
 - [ ] Enviar a fatura da UC `298240601131` (Elizabeth Rech) todo mês também — hoje só a de Guanabara é gerada com facilidade pelo usuário
-- [ ] Estender "Saúde da usina" com Performance Ratio, real vs. teórico, radiação e impacto ambiental — precisa de `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints novos (ver "Menu Saúde da usina")
 - [ ] Diagnóstico por string — FoxESS precisa de variáveis novas (`pv1Volt`/`pv2Volt`); Huawei já tem tudo em `getDevRealKpi`, só falta gravar/expor. Serve agora pra monitorar degradação do MPPT1 da Huawei ao longo do tempo (MPPT2 é vazio por projeto, não por defeito — ver "Limitações conhecidas" #5)
 - [ ] Comparativo ano a ano — sem dado real possível ainda (usina não completou 1 ano)

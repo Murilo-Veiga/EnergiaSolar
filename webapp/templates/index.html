@@ -1318,9 +1318,31 @@
     }
 
     // ---------- Dashboard ----------
+    // Cache do último valor de cada fetch, pra refreshAlerts() reaproveitar em
+    // vez de rebuscar /api/summary, /api/inverters e /api/day-status que já são
+    // buscados por esses timers independentes (ver refreshAlerts).
+    let lastSummary = null;
+    let lastInverters = null;
+    let lastDayStatus = null;
+
+    // "▼ 100% vs. ontem" é matematicamente correto de madrugada (hoje ainda é
+    // 0), mas só ruído visual antes do inversor acordar — escondido nessa
+    // janela. Depende de lastDayStatus.sunrise já ter chegado; se ainda não
+    // chegou (só no 1º tick logo após abrir a página), assume que não é antes
+    // do nascer do sol em vez de esconder à toa.
+    function isBeforeSunrise() {
+      const sunrise = lastDayStatus?.sunrise;
+      if (!sunrise) return false;
+      const now = new Date();
+      const [h, m] = sunrise.split(":").map(Number);
+      const sunriseToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+      return now < sunriseToday;
+    }
+
     async function refreshSummary() {
       const r = await fetch("/api/summary");
       const d = await r.json();
+      lastSummary = d;
 
       document.getElementById("kpi-power").textContent = fmtNum(d.instantaneous_power_kw, 2);
       document.getElementById("kpi-today").textContent = fmtNum(d.today_generated_kwh);
@@ -1343,7 +1365,7 @@
       }
 
       const deltaEl = document.getElementById("kpi-today-delta");
-      if (d.today_vs_yesterday_pct !== null && d.today_vs_yesterday_pct !== undefined) {
+      if (d.today_vs_yesterday_pct !== null && d.today_vs_yesterday_pct !== undefined && !isBeforeSunrise()) {
         deltaEl.hidden = false;
         const pct = d.today_vs_yesterday_pct;
         const up = pct >= 0;
@@ -1366,6 +1388,7 @@
     async function refreshInverters() {
       const r = await fetch("/api/inverters");
       const d = await r.json();
+      lastInverters = d;
       for (const inv of ["huawei", "foxess"]) {
         const data = d[inv] || {};
         document.getElementById(`inv-${inv}-power`).textContent = fmtNum(data.power_kw, 2);
@@ -1387,6 +1410,7 @@
     async function refreshDayStatus() {
       const r = await fetch("/api/day-status");
       const d = await r.json();
+      lastDayStatus = d;
 
       document.getElementById("day-status-date").textContent = d.date ?? "--";
       document.getElementById("day-status-generated").innerHTML =
@@ -1583,10 +1607,14 @@
     }
 
     async function refreshAlerts() {
+      // inv/day/summ já são buscados por refreshInverters/refreshDayStatus/
+      // refreshSummary (mesmos 30s de cadência) — reaproveita o último valor
+      // em vez de rebuscar; só falta na 1ª chamada (antes desses timers
+      // terminarem o 1º ciclo), daí busca direto como fallback.
       const [inv, day, summ, week] = await Promise.all([
-        fetch("/api/inverters").then(r => r.json()),
-        fetch("/api/day-status").then(r => r.json()),
-        fetch("/api/summary").then(r => r.json()),
+        lastInverters ?? fetch("/api/inverters").then(r => r.json()),
+        lastDayStatus ?? fetch("/api/day-status").then(r => r.json()),
+        lastSummary ?? fetch("/api/summary").then(r => r.json()),
         fetch("/api/history?range=semana").then(r => r.json()),
       ]);
 
