@@ -167,6 +167,24 @@ nunca faz o total regredir.
    > 0`) nesse dia local (`_apply_daily_reset_guard` em `collector/main.py`),
    pra não mostrar o total de ontem como se fosse de hoje. Comportamento
    esperado, não indica falha de coleta.
+5. **Huawei nunca chega perto dos 3 kW nominais** (máximo histórico até
+   17/07/2026: 1,745 kW, ~58% da capacidade) enquanto a FoxESS regularmente
+   satura nos 5 kW dela — **homologado em 17/07/2026** puxando o
+   `getDevRealKpi` bruto direto da API (fora do coletor, só leitura) e
+   comparando com o InfluxDB: o campo `active_power` bate exatamente com
+   `pv1_u × pv1_i` do string ativo (menos a perda de eficiência do
+   inversor, `efficiency` no próprio payload), sem nenhum clamp/arredondamento
+   no nosso código (`collector/main.py` só faz `dev_kpi.get("active_power")
+   or 0.0`, sem teto). Ou seja, **a coleta está correta** — o gargalo é físico,
+   não de dado. **Causa confirmada pelo próprio projeto de instalação**
+   (documento 54287, 12/06/2026, fornecido pelo usuário): o inversor B
+   (Huawei/SIW300H-3K) foi projetado com **7 módulos no MPPT1/String1 e 0
+   módulos no MPPT2/String2** — só 4,27 kWp DC ligados num inversor de 3 kW
+   AC (1,42x de sobredimensionamento), contra os 13 módulos (7,93 kWp,
+   7+6 nas 2 strings) do inversor A/FoxESS. `mppt_2_cap`/`mppt_3_cap`/
+   `mppt_4_cap` zerados na API batem exatamente com isso — **não é defeito
+   nem string desconectada, é o desenho do projeto**. Pra aproveitar o teto
+   de 3 kW da Huawei, precisaria de mais módulos no MPPT2 (hoje vazio).
 
 ## Design do painel
 
@@ -424,9 +442,16 @@ com cautela e medição, não de uma vez):
   (`radiation_intensity`).
 - **Comparativo ano a ano**: sem dado real possível ainda de qualquer forma
   (usina ligou 13/07/2026, não completou 1 ano).
-- **Diagnóstico por string** (tensão por entrada MPPT da FoxESS): precisa
-  de variáveis novas no `device/history/query` da FoxESS
-  (`pv1Volt`/`pv2Volt`), nunca usadas pelo coletor.
+- **Diagnóstico por string** (tensão/corrente por entrada MPPT): precisa de
+  variáveis novas no `device/history/query` da FoxESS (`pv1Volt`/`pv2Volt`),
+  nunca usadas pelo coletor. Pro lado da Huawei, `getDevRealKpi` já retorna
+  isso pronto (`pv1_u`/`pv1_i` ... `pv8_u`/`pv8_i`, `mppt_1_cap`...
+  `mppt_4_cap`) — só nunca foi gravado no InfluxDB nem exposto no painel.
+  Motivada pela homologação de 17/07/2026 (ver "Limitações conhecidas" #5):
+  o MPPT2 da Huawei está zerado por projeto (0 módulos, confirmado no
+  documento de instalação), não por defeito — mas gravar isso no InfluxDB
+  ainda vale, pra monitorar se o MPPT1 (a única string ativa) degrada com o
+  tempo.
 
 ## Consumo por unidade consumidora (Celesc)
 
@@ -720,5 +745,5 @@ decidir prioridade com calma.
 - [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura pós-13/07 chegar (ver "Consumo por unidade consumidora")
 - [ ] Enviar a fatura da UC `298240601131` (Elizabeth Rech) todo mês também — hoje só a de Guanabara é gerada com facilidade pelo usuário
 - [ ] Estender "Saúde da usina" com Performance Ratio, real vs. teórico, radiação e impacto ambiental — precisa de `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints novos (ver "Menu Saúde da usina")
-- [ ] Diagnóstico por string (FoxESS `pv1Volt`/`pv2Volt`) — precisa de variáveis novas no `device/history/query` (ver "Menu Saúde da usina")
+- [ ] Diagnóstico por string — FoxESS precisa de variáveis novas (`pv1Volt`/`pv2Volt`); Huawei já tem tudo em `getDevRealKpi`, só falta gravar/expor. Serve agora pra monitorar degradação do MPPT1 da Huawei ao longo do tempo (MPPT2 é vazio por projeto, não por defeito — ver "Limitações conhecidas" #5)
 - [ ] Comparativo ano a ano — sem dado real possível ainda (usina não completou 1 ano)
