@@ -17,6 +17,13 @@ HUAWEI_DEV_TYPE_ID = 38  # inversor (fixo na taxonomia de tipos de dispositivo d
 PLANT_TAG = "casa"
 BRAZIL_TZ = timezone(timedelta(hours=-3))
 
+# Permite desligar um inversor inteiramente (ex.: FOXESS_API_KEY ainda não
+# configurada) sem que o webapp interprete a ausência de dados como falha de
+# comunicação — ver _health_point/collect_once, que só grava saúde e conta
+# falha para os inversores habilitados.
+HUAWEI_ENABLED = os.environ.get("HUAWEI_ENABLED", "true").lower() != "false"
+FOXESS_ENABLED = os.environ.get("FOXESS_ENABLED", "true").lower() != "false"
+
 # Guarda em memória pra detectar "dia novo, contador do fabricante ainda não
 # resetou" (ver _apply_daily_reset_guard) — por inversor.
 _daily_reset_state: dict[str, dict] = {}
@@ -198,41 +205,51 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
     # o outro continua gravando normalmente nesse ciclo. Isso é o que permite
     # o webapp inferir "sem comunicação" por inversor (ausência de ponto
     # recente), sem precisar de um campo dedicado pra isso.
+    #
+    # Um inversor com HUAWEI_ENABLED/FOXESS_ENABLED=false nem entra nesse
+    # cálculo: huawei/foxess vêm None do main() nesse caso, então o try/except
+    # correspondente é pulado inteiro — não tenta a API, não conta falha, não
+    # grava collector_health. Sem isso, desligar um inversor sem API key ainda
+    # geraria alerta de "sem comunicação"/"falha constante" no dashboard.
     points = []
     huawei_data = fox_data = None
     huawei_error = fox_error = None
 
-    try:
-        huawei_data = _collect_huawei(huawei, station_code, dev_dn)
-        huawei_data["day_kwh"] = _apply_daily_reset_guard("huawei", huawei_data["power_kw"], huawei_data["day_kwh"])
-        points.append(_inverter_point("huawei", huawei_data))
-    except Exception as e:
-        log.exception("Falha ao coletar dados da Huawei nesse ciclo")
-        huawei_error = str(e)
+    if huawei is not None:
+        try:
+            huawei_data = _collect_huawei(huawei, station_code, dev_dn)
+            huawei_data["day_kwh"] = _apply_daily_reset_guard("huawei", huawei_data["power_kw"], huawei_data["day_kwh"])
+            points.append(_inverter_point("huawei", huawei_data))
+        except Exception as e:
+            log.exception("Falha ao coletar dados da Huawei nesse ciclo")
+            huawei_error = str(e)
 
-    try:
-        fox_data = _collect_foxess(foxess, foxess_sn)
-        fox_data["day_kwh"] = _apply_daily_reset_guard("foxess", fox_data["power_kw"], fox_data["day_kwh"])
-        points.append(_inverter_point("foxess", fox_data))
-        points.extend(_fox_history_points(foxess, foxess_sn))
-    except Exception as e:
-        log.exception("Falha ao coletar dados da FoxESS nesse ciclo")
-        fox_error = str(e)
+    if foxess is not None:
+        try:
+            fox_data = _collect_foxess(foxess, foxess_sn)
+            fox_data["day_kwh"] = _apply_daily_reset_guard("foxess", fox_data["power_kw"], fox_data["day_kwh"])
+            points.append(_inverter_point("foxess", fox_data))
+            points.extend(_fox_history_points(foxess, foxess_sn))
+        except Exception as e:
+            log.exception("Falha ao coletar dados da FoxESS nesse ciclo")
+            fox_error = str(e)
 
     # O contador de falhas e o ponto de saúde são gravados sempre — inclusive
     # quando os dois inversores falham nesse ciclo — pra que o alerta de
     # "falha constante" funcione mesmo num apagão total de comunicação, que é
-    # exatamente quando ele mais importa.
-    huawei_failures = _record_attempt("huawei", huawei_error)
-    fox_failures = _record_attempt("foxess", fox_error)
-    health_points = [
-        _health_point("huawei", huawei_failures, huawei_error),
-        _health_point("foxess", fox_failures, fox_error),
-    ]
-    if huawei_failures == FAILURE_ALERT_THRESHOLD:
-        log.error("Huawei falhando ha %d ciclos seguidos: %s", huawei_failures, huawei_error)
-    if fox_failures == FAILURE_ALERT_THRESHOLD:
-        log.error("FoxESS falhando ha %d ciclos seguidos: %s", fox_failures, fox_error)
+    # exatamente quando ele mais importa. Só não grava nada para um inversor
+    # desligado (huawei/foxess None) — não é falha, é ausência intencional.
+    health_points = []
+    if huawei is not None:
+        huawei_failures = _record_attempt("huawei", huawei_error)
+        health_points.append(_health_point("huawei", huawei_failures, huawei_error))
+        if huawei_failures == FAILURE_ALERT_THRESHOLD:
+            log.error("Huawei falhando ha %d ciclos seguidos: %s", huawei_failures, huawei_error)
+    if foxess is not None:
+        fox_failures = _record_attempt("foxess", fox_error)
+        health_points.append(_health_point("foxess", fox_failures, fox_error))
+        if fox_failures == FAILURE_ALERT_THRESHOLD:
+            log.error("FoxESS falhando ha %d ciclos seguidos: %s", fox_failures, fox_error)
 
     if not points:
         log.warning("Nenhum inversor respondeu nesse ciclo, nada gravado (exceto saude)")
@@ -292,15 +309,18 @@ def collect_once(huawei, foxess, station_code, dev_dn, foxess_sn, write_api, buc
 
 
 def main():
+    if not HUAWEI_ENABLED and not FOXESS_ENABLED:
+        raise SystemExit("HUAWEI_ENABLED e FOXESS_ENABLED estão os dois false — nenhum inversor pra coletar.")
+
     huawei = HuaweiClient(
         os.environ["HUAWEI_USERNAME"],
         os.environ["HUAWEI_SYSTEM_CODE"],
         base_url=os.environ.get("HUAWEI_BASE_URL", "https://la5.fusionsolar.huawei.com"),
-    )
+    ) if HUAWEI_ENABLED else None
     foxess = FoxessClient(
         os.environ["FOXESS_API_KEY"],
         base_url=os.environ.get("FOXESS_BASE_URL", "https://www.foxesscloud.com"),
-    )
+    ) if FOXESS_ENABLED else None
 
     bucket = os.environ["INFLUXDB_BUCKET"]
     org = os.environ["INFLUXDB_ORG"]
@@ -314,21 +334,28 @@ def main():
     # Retry com espera na descoberta inicial: se isso levantar exceção sem
     # tratamento, o container reinicia instantaneamente (restart:
     # unless-stopped) e martela as APIs em loop — o que já derrubou o rate
-    # limit de login da Huawei uma vez durante os testes.
+    # limit de login da Huawei uma vez durante os testes. Um inversor
+    # desligado (huawei/foxess None) não entra na condição do while abaixo —
+    # o loop só espera pelos inversores realmente habilitados.
     station_code = dev_dn = foxess_sn = None
-    while station_code is None or foxess_sn is None:
+    while (huawei is not None and station_code is None) or (foxess is not None and foxess_sn is None):
         try:
             log.info("Descobrindo usina e inversores...")
-            huawei.login()
-            station_code = huawei.get_station_list()[0]["stationCode"]
-            dev_dn = huawei.get_dev_list(station_code)[0]["devDn"]
-            log.info("Huawei: stationCode=%s devDn=%s", station_code, dev_dn)
+            if huawei is not None:
+                huawei.login()
+                station_code = huawei.get_station_list()[0]["stationCode"]
+                dev_dn = huawei.get_dev_list(station_code)[0]["devDn"]
+                log.info("Huawei: stationCode=%s devDn=%s", station_code, dev_dn)
 
-            foxess_sn = foxess.get_device_list()[0]["deviceSN"]
-            log.info("FoxESS: deviceSN=%s", foxess_sn)
+            if foxess is not None:
+                foxess_sn = foxess.get_device_list()[0]["deviceSN"]
+                log.info("FoxESS: deviceSN=%s", foxess_sn)
         except Exception:
             log.exception("Falha na descoberta inicial, tentando novamente em 60s")
-            station_code = dev_dn = foxess_sn = None
+            if huawei is not None:
+                station_code = dev_dn = None
+            if foxess is not None:
+                foxess_sn = None
             time.sleep(60)
 
     log.info("Coletor iniciado. Intervalo: %ss", INTERVAL_SECONDS)

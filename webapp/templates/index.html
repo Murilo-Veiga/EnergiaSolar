@@ -357,8 +357,8 @@
           </div>
         </div>
 
-        <div class="inv-row">
-          <div class="card inv-card">
+        <div class="inv-row" id="inv-row">
+          <div class="card inv-card" id="inv-card-huawei">
             <div class="inv-top">
               <div class="inv-id">
                 <span class="dot" style="background:var(--accent-blue)"></span>
@@ -380,7 +380,7 @@
               </div>
             </div>
           </div>
-          <div class="card inv-card">
+          <div class="card inv-card" id="inv-card-foxess">
             <div class="inv-top">
               <div class="inv-id">
                 <span class="dot" style="background:var(--accent-aqua)"></span>
@@ -653,13 +653,13 @@
               <span class="active" data-range="dia">Dia</span><span data-range="semana">Semana</span><span data-range="mes">Mês</span><span data-range="ano">Ano</span>
             </div>
             <div id="saude-contrib-body-content">
-              <div class="day-grid" style="grid-template-columns:repeat(2,1fr)">
-                <div>
+              <div class="day-grid" id="contrib-grid" style="grid-template-columns:repeat(2,1fr)">
+                <div id="contrib-col-huawei">
                   <div class="l">Huawei — real / esperado</div>
                   <div class="v" id="contrib-huawei-real">--</div>
                   <div class="aux" id="contrib-huawei-expected"></div>
                 </div>
-                <div>
+                <div id="contrib-col-foxess">
                   <div class="l">FoxESS — real / esperado</div>
                   <div class="v" id="contrib-foxess-real">--</div>
                   <div class="aux" id="contrib-foxess-expected"></div>
@@ -671,8 +671,8 @@
                 </div>
               </div>
               <div class="chart-legend" style="margin-top:10px">
-                <div class="item"><span class="sw" style="background:#3987e5;width:10px;height:10px;border-radius:2px;display:inline-block"></span>Huawei (3 kW)</div>
-                <div class="item"><span class="sw" style="background:#199e70;width:10px;height:10px;border-radius:2px;display:inline-block"></span>FoxESS (5 kW)</div>
+                <div class="item" id="legend-huawei"><span class="sw" style="background:#3987e5;width:10px;height:10px;border-radius:2px;display:inline-block"></span>Huawei (3 kW)</div>
+                <div class="item" id="legend-foxess"><span class="sw" style="background:#199e70;width:10px;height:10px;border-radius:2px;display:inline-block"></span>FoxESS (5 kW)</div>
               </div>
             </div>
           </div>
@@ -690,13 +690,13 @@
             <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
           </button>
           <div class="alert-body" id="saude-reliability-body" hidden>
-            <div class="day-grid" style="grid-template-columns:repeat(2,1fr)">
-              <div>
+            <div class="day-grid" id="rel-grid" style="grid-template-columns:repeat(2,1fr)">
+              <div id="rel-col-huawei">
                 <div class="l">Huawei</div>
                 <div class="v" id="rel-huawei-pct">--</div>
                 <div class="aux" id="rel-huawei-detail"></div>
               </div>
-              <div>
+              <div id="rel-col-foxess">
                 <div class="l">FoxESS</div>
                 <div class="v" id="rel-foxess-pct">--</div>
                 <div class="aux" id="rel-foxess-detail"></div>
@@ -1198,15 +1198,17 @@
       const d = await r.json();
       const labels = d.rows.map(row => row.date.slice(5));
 
+      const invDatasets = {
+        huawei: { label: "Huawei", data: d.rows.map(row => row.huawei_kwh), backgroundColor: "#3987e5", borderRadius: 4, borderSkipped: false, maxBarThickness: 26, stack: "s" },
+        foxess: { label: "FoxESS", data: d.rows.map(row => row.foxess_kwh), backgroundColor: "#199e70", borderRadius: 4, borderSkipped: false, maxBarThickness: 26, stack: "s" },
+      };
+
       if (saudeCharts.inversores) saudeCharts.inversores.destroy();
       saudeCharts.inversores = new Chart(document.getElementById("saude-inversores-canvas"), {
         type: "bar",
         data: {
           labels,
-          datasets: [
-            { label: "Huawei", data: d.rows.map(row => row.huawei_kwh), backgroundColor: "#3987e5", borderRadius: 4, borderSkipped: false, maxBarThickness: 26, stack: "s" },
-            { label: "FoxESS", data: d.rows.map(row => row.foxess_kwh), backgroundColor: "#199e70", borderRadius: 4, borderSkipped: false, maxBarThickness: 26, stack: "s" },
-          ],
+          datasets: ENABLED_INVERTERS.map(inv => invDatasets[inv]),
         },
         options: {
           responsive: true,
@@ -1236,32 +1238,34 @@
         pctEl.style.color = s.reliability_pct >= 95 ? "var(--good)" : (s.reliability_pct >= 80 ? "var(--ink-2)" : "var(--critical)");
         detailEl.textContent = `${s.total_cycles - s.failed_cycles} de ${s.total_cycles} coletas nos últimos 30 dias`;
       };
-      paint("huawei", "rel-huawei-pct", "rel-huawei-detail");
-      paint("foxess", "rel-foxess-pct", "rel-foxess-detail");
+      const idsByInv = { huawei: ["rel-huawei-pct", "rel-huawei-detail"], foxess: ["rel-foxess-pct", "rel-foxess-detail"] };
+      for (const inv of ENABLED_INVERTERS) paint(inv, ...idsByInv[inv]);
     }
 
     const INVERTER_CAPACITY_KWP = { huawei: 3.0, foxess: 5.0 };
+    const INVERTER_COLOR = { huawei: "#3987e5", foxess: "#199e70" };
 
     async function loadSaudeContrib(range) {
       const r = await fetch(`/api/history/inverters?range=${range}`);
       const d = await r.json();
-      const huaweiKwh = d.rows.reduce((s, row) => s + (row.huawei_kwh || 0), 0);
-      const foxessKwh = d.rows.reduce((s, row) => s + (row.foxess_kwh || 0), 0);
-      const totalKwh = huaweiKwh + foxessKwh;
-      const totalCapacity = INVERTER_CAPACITY_KWP.huawei + INVERTER_CAPACITY_KWP.foxess;
-      const huaweiExpectedPct = (INVERTER_CAPACITY_KWP.huawei / totalCapacity) * 100;
-      const foxessExpectedPct = (INVERTER_CAPACITY_KWP.foxess / totalCapacity) * 100;
-      const huaweiRealPct = totalKwh ? (huaweiKwh / totalKwh) * 100 : null;
-      const foxessRealPct = totalKwh ? (foxessKwh / totalKwh) * 100 : null;
+      const kwhByInv = {
+        huawei: d.rows.reduce((s, row) => s + (row.huawei_kwh || 0), 0),
+        foxess: d.rows.reduce((s, row) => s + (row.foxess_kwh || 0), 0),
+      };
+      const totalKwh = ENABLED_INVERTERS.reduce((s, inv) => s + kwhByInv[inv], 0);
+      const totalCapacity = ENABLED_INVERTERS.reduce((s, inv) => s + INVERTER_CAPACITY_KWP[inv], 0);
 
-      document.getElementById("contrib-huawei-real").textContent = huaweiRealPct !== null ? `${fmtNum(huaweiRealPct)}%` : "--";
-      document.getElementById("contrib-huawei-expected").textContent = `esperado ${fmtNum(huaweiExpectedPct)}% · ${fmtNum(huaweiKwh)} kWh`;
-      document.getElementById("contrib-foxess-real").textContent = foxessRealPct !== null ? `${fmtNum(foxessRealPct)}%` : "--";
-      document.getElementById("contrib-foxess-expected").textContent = `esperado ${fmtNum(foxessExpectedPct)}% · ${fmtNum(foxessKwh)} kWh`;
+      const realPct = {}, expectedPct = {};
+      for (const inv of ENABLED_INVERTERS) {
+        expectedPct[inv] = (INVERTER_CAPACITY_KWP[inv] / totalCapacity) * 100;
+        realPct[inv] = totalKwh ? (kwhByInv[inv] / totalKwh) * 100 : null;
+        document.getElementById(`contrib-${inv}-real`).textContent = realPct[inv] !== null ? `${fmtNum(realPct[inv])}%` : "--";
+        document.getElementById(`contrib-${inv}-expected`).textContent = `esperado ${fmtNum(expectedPct[inv])}% · ${fmtNum(kwhByInv[inv])} kWh`;
+      }
 
       const bar = document.getElementById("contrib-split-bar");
       bar.innerHTML = totalKwh
-        ? `<div style="width:${huaweiRealPct}%;background:#3987e5"></div><div style="width:${foxessRealPct}%;background:#199e70"></div>`
+        ? ENABLED_INVERTERS.map(inv => `<div style="width:${realPct[inv]}%;background:${INVERTER_COLOR[inv]}"></div>`).join("")
         : "";
     }
 
@@ -1330,10 +1334,55 @@
       sem_comunicacao: { cls: "st-critical", label: "Sem comunicação", tip: `Sem resposta da API há mais de ${COMM_TIMEOUT_MIN} min (3 ciclos de coleta) — pode indicar queda de energia, Wi-Fi ou disjuntor.` },
     };
 
+    // Preenchido por applyInverterConfig() a partir de /api/config (ver
+    // HUAWEI_ENABLED/FOXESS_ENABLED no .env) — todo loop que hoje itera
+    // ["huawei", "foxess"] passa a usar esta lista, pra não tentar renderizar
+    // dado de um inversor desligado (que nunca vai existir no InfluxDB).
+    let ENABLED_INVERTERS = ["huawei", "foxess"];
+
+    function hideEl(id) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    }
+
+    async function applyInverterConfig() {
+      let huaweiEnabled = true, foxessEnabled = true;
+      try {
+        const r = await fetch("/api/config");
+        const cfg = await r.json();
+        huaweiEnabled = cfg.huawei_enabled;
+        foxessEnabled = cfg.foxess_enabled;
+      } catch (e) {
+        console.warn("Falha ao buscar /api/config — assumindo os 2 inversores ligados", e);
+      }
+      ENABLED_INVERTERS = [];
+      if (huaweiEnabled) ENABLED_INVERTERS.push("huawei");
+      if (foxessEnabled) ENABLED_INVERTERS.push("foxess");
+
+      if (!huaweiEnabled) {
+        hideEl("inv-card-huawei");
+        hideEl("contrib-col-huawei");
+        hideEl("rel-col-huawei");
+        hideEl("legend-huawei");
+      }
+      if (!foxessEnabled) {
+        hideEl("inv-card-foxess");
+        hideEl("contrib-col-foxess");
+        hideEl("rel-col-foxess");
+        hideEl("legend-foxess");
+      }
+      if (ENABLED_INVERTERS.length === 1) {
+        for (const gridId of ["inv-row", "contrib-grid", "rel-grid"]) {
+          const el = document.getElementById(gridId);
+          if (el) el.style.gridTemplateColumns = "1fr";
+        }
+      }
+    }
+
     async function refreshInverters() {
       const r = await fetch("/api/inverters");
       const d = await r.json();
-      for (const inv of ["huawei", "foxess"]) {
+      for (const inv of ENABLED_INVERTERS) {
         const data = d[inv] || {};
         document.getElementById(`inv-${inv}-power`).textContent = fmtNum(data.power_kw, 2);
         document.getElementById(`inv-${inv}-day`).textContent = fmtNum(data.day_kwh);
@@ -1433,7 +1482,7 @@
     function computeAlerts(c) {
       const alerts = [];
 
-      for (const inv of ["huawei", "foxess"]) {
+      for (const inv of ENABLED_INVERTERS) {
         const d = c.inverters[inv] || {};
         if (d.status === "sem_comunicacao") {
           alerts.push({
@@ -1729,21 +1778,27 @@
       a.addEventListener("click", () => showView(a.dataset.tab));
     });
 
-    paintIconBadges();
-    paintNewBadges();
-    initGeracaoChart("dash", "dash-canvas");
-    initHistoricoTab();
+    (async function init() {
+      // Precisa terminar antes do primeiro refreshInverters/refreshAlerts —
+      // são eles que iteram ENABLED_INVERTERS, preenchido por essa chamada.
+      await applyInverterConfig();
 
-    refreshSummary();
-    refreshInverters();
-    refreshDayStatus();
-    refreshForecast();
-    refreshAlerts();
-    setInterval(refreshSummary, 30000);
-    setInterval(refreshInverters, 30000);
-    setInterval(refreshDayStatus, 30000);
-    setInterval(refreshForecast, 1800000);
-    setInterval(refreshAlerts, 30000);
+      paintIconBadges();
+      paintNewBadges();
+      initGeracaoChart("dash", "dash-canvas");
+      initHistoricoTab();
+
+      refreshSummary();
+      refreshInverters();
+      refreshDayStatus();
+      refreshForecast();
+      refreshAlerts();
+      setInterval(refreshSummary, 30000);
+      setInterval(refreshInverters, 30000);
+      setInterval(refreshDayStatus, 30000);
+      setInterval(refreshForecast, 1800000);
+      setInterval(refreshAlerts, 30000);
+    })();
   </script>
 </body>
 </html>

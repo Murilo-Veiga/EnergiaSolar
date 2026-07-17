@@ -20,9 +20,11 @@ services:
     container_name: solar-home-collector
     restart: unless-stopped
     environment:
+      HUAWEI_ENABLED: ${HUAWEI_ENABLED:-true}
       HUAWEI_USERNAME: ${HUAWEI_USERNAME}
       HUAWEI_SYSTEM_CODE: ${HUAWEI_SYSTEM_CODE}
       HUAWEI_BASE_URL: ${HUAWEI_BASE_URL:-https://la5.fusionsolar.huawei.com}
+      FOXESS_ENABLED: ${FOXESS_ENABLED:-true}
       FOXESS_API_KEY: ${FOXESS_API_KEY}
       FOXESS_BASE_URL: ${FOXESS_BASE_URL:-https://www.foxesscloud.com}
       PLANT_INSTALLED_POWER_KWP: ${PLANT_INSTALLED_POWER_KWP:-12.2}
@@ -41,6 +43,8 @@ services:
     ports:
       - "8080:8000"
     environment:
+      HUAWEI_ENABLED: ${HUAWEI_ENABLED:-true}
+      FOXESS_ENABLED: ${FOXESS_ENABLED:-true}
       PLANT_LAT: ${PLANT_LAT}
       PLANT_LON: ${PLANT_LON}
       INFLUXDB_URL: http://influxdb:8086

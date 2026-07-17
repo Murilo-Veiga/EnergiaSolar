@@ -56,21 +56,25 @@ docker compose up -d --build
 
 ## Detalhes da instalação
 
-- **20 módulos de 610 Wp** = 12,2 kWp instalados (nameplate DC)
-- **Inversor FoxESS** (SIW200G-5K, 5 kW) — 13 módulos
-- **Inversor Huawei** (SIW300H-3K, 3 kW) — 7 módulos
-- **Capacidade AC total: 8 kW**
-- Endereço: R. Guanabara, 3787 — Fátima, Joinville-SC
+Os dados de instalação (potência instalada, nº de módulos, modelo dos
+inversores, endereço) variam por usina e não ficam neste README — são
+configurados por instância via `.env` (`PLANT_INSTALLED_POWER_KWP`,
+`PLANT_LAT`/`PLANT_LON`) e descobertos automaticamente pelo coletor
+(`stationCode`/`devDn` da Huawei, `deviceSN` da FoxESS — ver
+`collector/main.py`). Cada inversor pode ser ligado/desligado
+independentemente via `HUAWEI_ENABLED`/`FOXESS_ENABLED` (ver `.env.example`)
+para usinas que só têm 1 dos 2 fabricantes.
 
 ## Fontes de dados oficiais
 
-| Inversor | Fabricante/API | Identificador | Capacidade |
+| Inversor | Fabricante/API | Identificador | Descoberto por |
 |---|---|---|---|
-| FoxESS | **FoxESS Cloud** | `deviceSN=J0MF502056LD436`, modelo `SIW200G M050 W1` | 5 kW |
-| Huawei | **Huawei FusionSolar (NBI)** | `stationCode=NE=56719752`, `devDn=NE=56719754`, modelo `SIW300H M030 W00` | 3 kW |
+| FoxESS | **FoxESS Cloud** | `deviceSN` | `device/list` (primeiro item da conta) |
+| Huawei | **Huawei FusionSolar (NBI)** | `stationCode`/`devDn` | `getStationList`/`getDevList` (primeiro item da conta) |
 
-(O nome comercial "SIW200G-5K"/"SIW300H-3K" usado pela instaladora é o
-rebrand — o hardware/telemetria real é Huawei e FoxESS.)
+(O nome comercial usado por instaladoras — ex. "SIW300H-3K"/"SIW200G-5K" — é
+frequentemente um rebrand; o hardware/telemetria real por trás costuma ser
+Huawei e/ou FoxESS, dependendo do instalador.)
 
 ### Huawei FusionSolar — Northbound Interface (NBI)
 
@@ -157,9 +161,16 @@ nunca faz o total regredir.
    sem previsão.
 2. **Curva intradiária da Huawei é grosseira** (1 ponto a cada 5 min, pelo
    rate limit do NBI) — a FoxESS tem resolução bem melhor pro mesmo período.
-3. **Histórico começa em 13/07/2026**: confirmado via `getKpiStationDay`
-   (Huawei) e `device/report/query` (FoxESS) que a usina só passou a gerar
-   de fato nessa data — não há dado real anterior a recuperar.
+3. **Histórico só existe a partir da data real em que a usina começou a
+   gerar**: `getKpiStationDay`/`getKpiStationMonth` (Huawei) e
+   `device/report/query` (FoxESS) não retornam nada anterior a essa data —
+   normal, não é limitação de coleta. Dá pra confirmar a data real e fazer
+   backfill do histórico existente na nuvem do fabricante consultando esses
+   endpoints diretamente (ver "Estrutura do projeto" para os clientes já
+   prontos em `collector/huawei_client.py`/`foxess_client.py`) — a Huawei em
+   particular costuma devolver uma janela de ~25-30 dias por chamada (não 1
+   dia por chamada), então poucas consultas já cobrem meses de histórico,
+   respeitando o rate limit de 300s por interface.
 4. **"Gerado hoje" fica em 0 até o inversor acordar de manhã**: as nuvens da
    Huawei/FoxESS cacheiam o total do dia anterior e só atualizam quando o
    inversor manda telemetria nova — de madrugada ele fica dormindo. O
@@ -167,24 +178,16 @@ nunca faz o total regredir.
    > 0`) nesse dia local (`_apply_daily_reset_guard` em `collector/main.py`),
    pra não mostrar o total de ontem como se fosse de hoje. Comportamento
    esperado, não indica falha de coleta.
-5. **Huawei nunca chega perto dos 3 kW nominais** (máximo histórico até
-   17/07/2026: 1,745 kW, ~58% da capacidade) enquanto a FoxESS regularmente
-   satura nos 5 kW dela — **homologado em 17/07/2026** puxando o
-   `getDevRealKpi` bruto direto da API (fora do coletor, só leitura) e
-   comparando com o InfluxDB: o campo `active_power` bate exatamente com
-   `pv1_u × pv1_i` do string ativo (menos a perda de eficiência do
-   inversor, `efficiency` no próprio payload), sem nenhum clamp/arredondamento
-   no nosso código (`collector/main.py` só faz `dev_kpi.get("active_power")
-   or 0.0`, sem teto). Ou seja, **a coleta está correta** — o gargalo é físico,
-   não de dado. **Causa confirmada pelo próprio projeto de instalação**
-   (documento 54287, 12/06/2026, fornecido pelo usuário): o inversor B
-   (Huawei/SIW300H-3K) foi projetado com **7 módulos no MPPT1/String1 e 0
-   módulos no MPPT2/String2** — só 4,27 kWp DC ligados num inversor de 3 kW
-   AC (1,42x de sobredimensionamento), contra os 13 módulos (7,93 kWp,
-   7+6 nas 2 strings) do inversor A/FoxESS. `mppt_2_cap`/`mppt_3_cap`/
-   `mppt_4_cap` zerados na API batem exatamente com isso — **não é defeito
-   nem string desconectada, é o desenho do projeto**. Pra aproveitar o teto
-   de 3 kW da Huawei, precisaria de mais módulos no MPPT2 (hoje vazio).
+5. **Um inversor pode nunca chegar perto da capacidade nominal do fabricante**
+   sem que isso seja defeito ou bug de coleta — o gargalo costuma ser físico
+   (desenho elétrico da instalação: nº de módulos por MPPT/string
+   sobre/sub-dimensionado em relação ao inversor). Antes de suspeitar de bug
+   na coleta, vale comparar o `getDevRealKpi`/equivalente bruto direto da API
+   (fora do coletor, só leitura) com o InfluxDB e, se bater, checar o projeto
+   elétrico da instalação (nº de módulos por string) em vez do código —
+   `collector/main.py` não aplica nenhum clamp/teto no valor de potência
+   (`dev_kpi.get("active_power") or 0.0`, sem arredondamento pra cima ou
+   baixo).
 
 ## Design do painel
 
@@ -268,8 +271,8 @@ abaixo):
 | Geração do dia ≥10% abaixo da média da semana | `/api/summary` (hoje) vs. `/api/history?range=semana` (média) | informativo |
 
 O limiar de temperatura (`TEMP_THRESHOLD_C = 65`, em `templates/index.html`)
-é **ilustrativo** — não validamos contra a doc oficial dos modelos exatos
-(SIW300H-3K / SIW200G-5K), só pesquisa geral de mercado (ver pendências).
+é **ilustrativo** — não validado contra a doc oficial do modelo exato do
+inversor de cada instalação, só pesquisa geral de mercado (ver pendências).
 
 Cada alerta tem um botão "Marcar como lida", que some com ele da lista e do
 contador do badge. A marcação vive em `sessionStorage` (chave por tipo de
@@ -407,7 +410,7 @@ de design".
 | Seção | Título exibido | Fonte |
 |---|---|---|
 | Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` — gráfico empilhado, sempre no mês |
-| Contribuição real vs. esperada | "🎯 Contribuição real vs. esperada pela capacidade" | `/api/history/inverters?range=X`, com seletor Dia/Semana/Mês/Ano — compara o % real gerado por cada inversor com o % esperado só pela capacidade instalada (Huawei 3 kW = 37,5%, FoxESS 5 kW = 62,5%), pra notar se um lado está rendendo menos que deveria |
+| Contribuição real vs. esperada | "🎯 Contribuição real vs. esperada pela capacidade" | `/api/history/inverters?range=X`, com seletor Dia/Semana/Mês/Ano — compara o % real gerado por cada inversor com o % esperado só pela capacidade instalada de cada um (`INVERTER_CAPACITY_KWP` em `templates/index.html`), pra notar se um lado está rendendo menos que deveria. Só aparece pros inversores habilitados (`HUAWEI_ENABLED`/`FOXESS_ENABLED`) |
 | Confiabilidade da coleta | "🛡 Confiabilidade da coleta de dados" | `/api/collector-health?days=30` — % de ciclos de coleta sem falha nos últimos 30 dias, por inversor |
 
 `/api/history/inverters` **não precisou de nenhum dado novo do coletor**:
@@ -416,7 +419,7 @@ deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
 vale pro `daily_generation` (o último valor do dia é o total do dia), só
 que aplicado por inversor em vez do total da usina. Semana/Mês/Ano usam o
 mesmo `RANGE_DAYS` (janela corrida, não alinhada ao calendário) do resto do
-painel — com pouco histórico acumulado (usina ligou 13/07/2026), esses 3
+painel — com pouco histórico acumulado (usina recém-instalada), esses 3
 períodos podem mostrar o mesmo resultado até existir mais de ~7 dias de
 dado. **Dia é exceção** (corrigido em 2026-07-17): usa a meia-noite BRT de
 hoje como início em vez de `-1d` rolante — com `-1d`, o último ponto de
@@ -440,28 +443,25 @@ com cautela e medição, não de uma vez):
   pelo coletor até hoje.
 - **Radiação medida vs. geração**: mesma dependência do item acima
   (`radiation_intensity`).
-- **Comparativo ano a ano**: sem dado real possível ainda de qualquer forma
-  (usina ligou 13/07/2026, não completou 1 ano).
+- **Comparativo ano a ano**: sem dado real possível enquanto a usina não
+  completar 1 ano de operação.
 - **Diagnóstico por string** (tensão/corrente por entrada MPPT): precisa de
   variáveis novas no `device/history/query` da FoxESS (`pv1Volt`/`pv2Volt`),
   nunca usadas pelo coletor. Pro lado da Huawei, `getDevRealKpi` já retorna
   isso pronto (`pv1_u`/`pv1_i` ... `pv8_u`/`pv8_i`, `mppt_1_cap`...
   `mppt_4_cap`) — só nunca foi gravado no InfluxDB nem exposto no painel.
-  Motivada pela homologação de 17/07/2026 (ver "Limitações conhecidas" #5):
-  o MPPT2 da Huawei está zerado por projeto (0 módulos, confirmado no
-  documento de instalação), não por defeito — mas gravar isso no InfluxDB
-  ainda vale, pra monitorar se o MPPT1 (a única string ativa) degrada com o
-  tempo.
+  Útil pra monitorar degradação de uma string ao longo do tempo, ou pra
+  investigar se um MPPT sem módulos ligados (0 no projeto elétrico, não
+  defeito) está sendo confundido com falha (ver "Limitações conhecidas" #5).
 
 ## Consumo por unidade consumidora (Celesc)
 
-A usina compensa energia em **2 unidades consumidoras (UC)** da Celesc, a
-concessionária local — não é só a usina que "consome" a própria geração:
-
-| UC (formato novo ANEEL) | Endereço | Titular |
-|---|---|---|
-| `19647901154` | Guanabara 3787 (onde a usina está) | Maria Terezinha da Veiga |
-| `298240601131` | Elizabeth Rech 171 | Marcelo Romano da Veiga (portabilidade de créditos) |
+A geração pode ser compensada em 1 ou mais **unidades consumidoras (UC)** da
+Celesc, a concessionária local (ex.: portabilidade de créditos entre
+unidades) — o painel não assume um número fixo de UCs; cada uma vira uma tag
+(`uc`) própria no InfluxDB conforme faturas forem enviadas pela aba
+"Consumo" (`UC_LABELS` em `webapp/main.py` mapeia o número da UC pra um
+rótulo amigável — ajustar esse mapa com as UCs de cada instalação).
 
 **Por que não integramos direto com a Celesc**: avaliamos e descartamos —
 não existe API oficial pra consulta de consumo/fatura de terceiros, só o
@@ -485,8 +485,8 @@ traz — ou seja, um único upload já faz backfill de quase 1 ano.
   ser X" no comunicado da fatura e usa **sempre o formato novo** como tag,
   pra não quebrar a série no InfluxDB quando a próxima fatura já vier só
   com o número novo.
-- **Economia**: até agora, nenhuma fatura enviada cobre um período com
-  geração solar (a usina só ligou 13/07 — ver "Limitações conhecidas") —
+- **Economia**: enquanto nenhuma fatura enviada cobrir um período com
+  geração solar (usina recém-instalada — ver "Limitações conhecidas"),
   não tem como validar contra dado real ainda. O painel mostra uma
   **estimativa** (geração acumulada × tarifa efetiva da fatura mais
   recente), com selo "estimativa" visível. Quando uma fatura futura trouxer
@@ -741,9 +741,9 @@ decidir prioridade com calma.
 
 - [ ] Confirmar o formato real do `getAlarmList` da Huawei quando um alarme de verdade acontecer (ver "Outros campos")
 - [ ] Confirmar se a temperatura do inversor Huawei sai de `0.0` durante geração de pico
-- [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, hoje ilustrativo) contra a doc oficial do SIW300H-3K/SIW200G-5K (ver "Central de alertas")
-- [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura pós-13/07 chegar (ver "Consumo por unidade consumidora")
-- [ ] Enviar a fatura da UC `298240601131` (Elizabeth Rech) todo mês também — hoje só a de Guanabara é gerada com facilidade pelo usuário
+- [ ] Validar o limiar de temperatura da Central de alertas (`65°C`, hoje ilustrativo) contra a doc oficial do modelo exato do inversor de cada instalação (ver "Central de alertas")
+- [ ] Estender o parser da Celesc pra ler o crédito de compensação oficial quando a primeira fatura com geração solar chegar (ver "Consumo por unidade consumidora")
+- [ ] Se houver mais de 1 UC, garantir que a fatura de todas seja enviada com regularidade (hoje depende de upload manual por UC)
 - [ ] Estender "Saúde da usina" com Performance Ratio, real vs. teórico, radiação e impacto ambiental — precisa de `getKpiStationDay`/`Month`/`Year` da Huawei, endpoints novos (ver "Menu Saúde da usina")
 - [ ] Diagnóstico por string — FoxESS precisa de variáveis novas (`pv1Volt`/`pv2Volt`); Huawei já tem tudo em `getDevRealKpi`, só falta gravar/expor. Serve agora pra monitorar degradação do MPPT1 da Huawei ao longo do tempo (MPPT2 é vazio por projeto, não por defeito — ver "Limitações conhecidas" #5)
 - [ ] Comparativo ano a ano — sem dado real possível ainda (usina não completou 1 ano)

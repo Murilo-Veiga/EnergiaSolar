@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:info.support.huawei.com)",
+      "Bash(curl -s -L \"https://info.support.huawei.com/DpinfoAppBiz/#/u?i=TxvNXxKe&l=en_US\" -m 15)"
+    ]
+  }
+}

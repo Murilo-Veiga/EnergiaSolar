@@ -20,6 +20,15 @@ INFLUX_BUCKET = os.environ["INFLUXDB_BUCKET"]
 PLANT_LAT = os.environ["PLANT_LAT"]
 PLANT_LON = os.environ["PLANT_LON"]
 
+# Mesmas flags do collector/main.py — um inversor desligado não tem dado
+# nenhum gravado (nem sucesso nem falha, ver collector), então os endpoints
+# abaixo precisam saber pra não tratar a ausência como "sem comunicação".
+HUAWEI_ENABLED = os.environ.get("HUAWEI_ENABLED", "true").lower() != "false"
+FOXESS_ENABLED = os.environ.get("FOXESS_ENABLED", "true").lower() != "false"
+ENABLED_INVERTERS = tuple(
+    inv for inv, enabled in (("huawei", HUAWEI_ENABLED), ("foxess", FOXESS_ENABLED)) if enabled
+)
+
 # Precisa bater com o PLANT_TAG do collector/main.py — sem esse filtro, uma
 # série com tag de plant_id diferente ficaria numa tabela separada no Flux e
 # poderia ser retornada no lugar da série atual.
@@ -285,11 +294,19 @@ def summary():
 COMM_TIMEOUT_MINUTES = 15
 
 
+@app.get("/api/config")
+def config():
+    """Config exposta ao frontend pra saber quais inversores existem — ver
+    HUAWEI_ENABLED/FOXESS_ENABLED. Sem isso, o dashboard mostraria card e
+    seções de "Saúde da usina" pra um inversor que nunca vai ter dado."""
+    return {"huawei_enabled": HUAWEI_ENABLED, "foxess_enabled": FOXESS_ENABLED}
+
+
 @app.get("/api/inverters")
 def inverters():
     result = {}
     now = datetime.now(timezone.utc)
-    for inverter in ("huawei", "foxess"):
+    for inverter in ENABLED_INVERTERS:
         flux = f'''
         from(bucket: "{INFLUX_BUCKET}")
           |> range(start: -1h)
@@ -455,7 +472,7 @@ def history_records():
     from(bucket: "{INFLUX_BUCKET}")
       |> range(start: 0)
       |> filter(fn: (r) => r._measurement == "daily_generation" and r._field == "generated_kwh" and r.plant_id == "{PLANT_TAG}")
-      |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)
+      |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false, timeSrc: "_start")
       |> sort(columns: ["_value"], desc: true)
       |> limit(n: 1)
     '''
@@ -592,7 +609,7 @@ def collector_health_reliability(days: int = 30):
     sempre, sem sobrescrever (ver "Falhas de coleta e fallback seguro").
     Não precisa de nenhuma coleta nova, só nunca foi exposto antes."""
     result = {}
-    for inverter in ("huawei", "foxess"):
+    for inverter in ENABLED_INVERTERS:
         flux = f'''
         from(bucket: "{INFLUX_BUCKET}")
           |> range(start: -{days}d)
