@@ -54,5 +54,45 @@ services:
     depends_on:
       - influxdb
 
+  # --- Stack novo (Go + Postgres + React), rodando ao lado do stack Python
+  # + InfluxDB acima até atingir paridade validada — ver plano em
+  # /home/marcos/.claude/plans/polymorphic-humming-fog.md ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: solar-home-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-solarhome}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-solarhome}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  api-go:
+    build: ./api-go
+    container_name: solar-home-api-go
+    restart: unless-stopped
+    ports:
+      - "8090:8000"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-solarhome}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-solarhome}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
+      # Só usados pelo comando "seed" (docker compose run --entrypoint seed api-go)
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD}
+      HUAWEI_ENABLED: ${HUAWEI_ENABLED:-true}
+      HUAWEI_USERNAME: ${HUAWEI_USERNAME}
+      HUAWEI_SYSTEM_CODE: ${HUAWEI_SYSTEM_CODE}
+      HUAWEI_BASE_URL: ${HUAWEI_BASE_URL:-https://la5.fusionsolar.huawei.com}
+      PLANT_LAT: ${PLANT_LAT}
+      PLANT_LON: ${PLANT_LON}
+      PLANT_INSTALLED_POWER_KWP: ${PLANT_INSTALLED_POWER_KWP}
+    depends_on:
+      - postgres
+
 volumes:
   influxdb-data:
+  postgres-data:

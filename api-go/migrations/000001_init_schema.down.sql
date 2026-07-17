@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS annotation;
+DROP TABLE IF EXISTS consumption;
+DROP TABLE IF EXISTS collector_health;
+DROP TABLE IF EXISTS daily_generation;
+DROP TABLE IF EXISTS inverter_status;
+DROP TABLE IF EXISTS plant_status;
+DROP TABLE IF EXISTS consumer_units;
+DROP TABLE IF EXISTS inverter_credentials;
+DROP TABLE IF EXISTS plants;
+DROP TABLE IF EXISTS users;
