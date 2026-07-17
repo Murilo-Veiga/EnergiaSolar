@@ -101,9 +101,22 @@
   .inv-vals .p .unit { font-size: 11px; color: var(--ink-muted); }
   .inv-vals .k { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
   .inv-status { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 650; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
-  .inv-status i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .inv-status i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; position: relative; }
   .inv-status.st-good { color: var(--good); background: rgba(12,163,12,0.12); }
   .inv-status.st-good i { background: var(--good); }
+  /* pulso tipo "radar" no ponto verde — só enquanto gerando de verdade, pra
+     dar a sensação de algo acontecendo agora (não é só um selo estático) */
+  .inv-status.st-good i::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--good);
+    animation: pulse-dot 1.8s ease-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%   { transform: scale(1);   opacity: 0.65; }
+    100% { transform: scale(2.8); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .inv-status.st-good i::after { animation: none; content: none; }
+  }
   .inv-status.st-idle { color: var(--ink-muted); background: var(--surface-2); }
   .inv-status.st-idle i { background: var(--ink-muted); }
   .inv-status.st-critical { color: var(--critical); background: rgba(208,59,59,0.16); }
