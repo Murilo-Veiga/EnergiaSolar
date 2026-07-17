@@ -198,6 +198,9 @@
   .day-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 14px; }
   .day-grid .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 4px; }
   .day-grid .v { font-size: 15px; font-weight: 600; font-family: var(--font-data); }
+  .day-grid .aux { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 3px; font-family: var(--font-data); }
+  .hero-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .hero-line .aux { font-size: 12.5px; color: var(--ink-muted); }
   .day-extra { display: flex; gap: 26px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
   .day-extra-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
   .day-extra-item .l { color: var(--ink-muted); }
@@ -526,6 +529,48 @@
           </div>
         </div>
 
+        <div class="card alert-card hist-collapsible" id="hist-streak-card">
+          <button class="alert-toggle" data-target="hist-streak-body">
+            <div class="alert-head">
+              <span class="icon-badge gold size-card" data-icon="trendingUp"></span>
+              <span class="tt">
+                <h3>Sequência de dias acima da média<span data-new-key="hist-streak"></span></h3>
+                <span class="tip tip-wide">Quantos dias seguidos a usina vem gerando acima da média do período — e o melhor/pior dia de dentro desse mesmo período.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="hist-streak-body" hidden>
+            <div class="hero-line">
+              <span class="v" id="streak-count" style="font-size:30px">--</span>
+              <span class="aux" id="streak-desc"></span>
+            </div>
+            <div class="day-grid" style="grid-template-columns:repeat(2,1fr);margin-top:16px">
+              <div><div class="l">Melhor dia do período</div><div class="v" id="streak-best">--</div></div>
+              <div><div class="l">Pior dia do período</div><div class="v" id="streak-worst">--</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card alert-card hist-collapsible" id="hist-yield-card">
+          <button class="alert-toggle" data-target="hist-yield-body">
+            <div class="alert-head">
+              <span class="icon-badge blue size-card" data-icon="sun"></span>
+              <span class="tt">
+                <h3>Rendimento comparado ao período anterior<span data-new-key="hist-yield"></span></h3>
+                <span class="tip tip-wide">kWh gerados pra cada kW instalado, comparando este período com o imediatamente anterior — mais justo que comparar só o total, porque não depende do tamanho do período.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="hist-yield-body" hidden>
+            <div class="day-grid" style="grid-template-columns:repeat(2,1fr)">
+              <div><div class="l">Rendimento deste período</div><div class="v" id="yield-current">--</div></div>
+              <div><div class="l">Rendimento período anterior</div><div class="v" id="yield-previous">--</div></div>
+            </div>
+          </div>
+        </div>
+
         <div class="card alert-card hist-collapsible" id="hist-anotacoes-card">
           <button class="alert-toggle" data-target="hist-anotacoes-body">
             <div class="alert-head">
@@ -585,6 +630,74 @@
             <div class="chart-legend" style="margin-top:12px">
               <div class="item"><span class="sw" style="background:#3987e5;width:10px;height:10px;border-radius:2px;display:inline-block"></span>Huawei (3 kW)</div>
               <div class="item"><span class="sw" style="background:#199e70;width:10px;height:10px;border-radius:2px;display:inline-block"></span>FoxESS (5 kW)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card alert-card hist-collapsible" id="saude-contrib-card">
+          <button class="alert-toggle" data-target="saude-contrib-body">
+            <div class="alert-head">
+              <span class="icon-badge gold size-card" data-icon="target"></span>
+              <span class="tt">
+                <h3>Contribuição real vs. esperada pela capacidade<span data-new-key="saude-contrib-range"></span></h3>
+                <span class="tip tip-wide">Cada inversor tem uma capacidade diferente (Huawei 3 kW, FoxESS 5 kW). Aqui comparamos o quanto cada um gerou de verdade com o quanto seria esperado só pelo tamanho — pra notar se algum está rendendo menos do que deveria.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="saude-contrib-body" hidden>
+            <div class="range-toggle" id="saude-contrib-toggle" style="margin-bottom:14px">
+              <span class="active" data-range="dia">Dia</span><span data-range="semana">Semana</span><span data-range="mes">Mês</span><span data-range="ano">Ano</span>
+            </div>
+            <div id="saude-contrib-body-content">
+              <div class="day-grid" style="grid-template-columns:repeat(2,1fr)">
+                <div>
+                  <div class="l">Huawei — real / esperado</div>
+                  <div class="v" id="contrib-huawei-real">--</div>
+                  <div class="aux" id="contrib-huawei-expected"></div>
+                </div>
+                <div>
+                  <div class="l">FoxESS — real / esperado</div>
+                  <div class="v" id="contrib-foxess-real">--</div>
+                  <div class="aux" id="contrib-foxess-expected"></div>
+                </div>
+              </div>
+              <div class="chart-legend" style="margin-top:14px" id="contrib-bar-wrap">
+                <div style="width:100%">
+                  <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--surface-2)" id="contrib-split-bar"></div>
+                </div>
+              </div>
+              <div class="chart-legend" style="margin-top:10px">
+                <div class="item"><span class="sw" style="background:#3987e5;width:10px;height:10px;border-radius:2px;display:inline-block"></span>Huawei (3 kW)</div>
+                <div class="item"><span class="sw" style="background:#199e70;width:10px;height:10px;border-radius:2px;display:inline-block"></span>FoxESS (5 kW)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card alert-card hist-collapsible" id="saude-reliability-card">
+          <button class="alert-toggle" data-target="saude-reliability-body">
+            <div class="alert-head">
+              <span class="icon-badge blue size-card" data-icon="shield"></span>
+              <span class="tt">
+                <h3>Confiabilidade da coleta de dados<span data-new-key="saude-reliability"></span></h3>
+                <span class="tip tip-wide">De cada 100 tentativas de buscar dados nos inversores, quantas deram certo nos últimos 30 dias. Uma taxa baixa não significa que a usina parou — só que o painel teve mais dificuldade de consultar aquele inversor.</span>
+              </span>
+            </div>
+            <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
+          </button>
+          <div class="alert-body" id="saude-reliability-body" hidden>
+            <div class="day-grid" style="grid-template-columns:repeat(2,1fr)">
+              <div>
+                <div class="l">Huawei</div>
+                <div class="v" id="rel-huawei-pct">--</div>
+                <div class="aux" id="rel-huawei-detail"></div>
+              </div>
+              <div>
+                <div class="l">FoxESS</div>
+                <div class="v" id="rel-foxess-pct">--</div>
+                <div class="aux" id="rel-foxess-detail"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -690,6 +803,8 @@
         flag: `<path d="M5 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 4.2h11.5l-2.7 4.3l2.7 4.3H5Z" fill="currentColor"/>`,
         trendingDown: `<polyline points="3,7 9,13 13,9 21,18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><polygon points="21,18 21,11.5 14.5,18" fill="currentColor"/>`,
         plug: `<path d="M9 2.5v4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 2.5v4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 7.7h10v4a5 5 0 0 1-10 0v-4Z" fill="currentColor"/><path d="M12 16.7v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+        target: `<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>`,
+        shield: `<path d="M12 2.5 L19.5 5.5 V11.5 C19.5 16.5 16.3 20 12 21.5 C7.7 20 4.5 16.5 4.5 11.5 V5.5 Z" fill="currentColor"/>`,
       }[name] || "";
       return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">${body}</svg>`;
     }
@@ -715,6 +830,10 @@
     const NEW_FEATURES_SINCE = {
       "nav-saude": "2026-07-16",
       "clima-horas-de-sol": "2026-07-16",
+      "hist-streak": "2026-07-16",
+      "hist-yield": "2026-07-16",
+      "saude-reliability": "2026-07-16",
+      "saude-contrib-range": "2026-07-16",
     };
 
     function isFeatureNew(key) {
@@ -930,6 +1049,37 @@
       document.getElementById("hist-economia-delta").textContent = deltaLabel(data.total_brl, data.previous_total_brl);
       renderHistBarChart("hist-economia-canvas", labels, data.rows.map(r => r.valor_estimado_brl), "#199e70");
 
+      // Sequência de dias acima da média + melhor/pior dia do período
+      const validRows = data.rows.filter(r => r.generated_kwh !== null && r.generated_kwh !== undefined);
+      const avgKwh = validRows.length ? data.total_kwh / validRows.length : null;
+      let streak = 0;
+      for (let i = data.rows.length - 1; i >= 0; i--) {
+        const v = data.rows[i].generated_kwh;
+        if (avgKwh !== null && v !== null && v !== undefined && v > avgKwh) streak++;
+        else break;
+      }
+      document.getElementById("streak-count").textContent = streak;
+      document.getElementById("streak-desc").textContent = avgKwh !== null
+        ? `dia${streak === 1 ? "" : "s"} seguido${streak === 1 ? "" : "s"} gerando acima da média do período (${fmtNum(avgKwh)} kWh/dia)`
+        : "sem dado suficiente ainda";
+      if (validRows.length) {
+        const best = validRows.reduce((a, b) => (b.generated_kwh > a.generated_kwh ? b : a));
+        const worst = validRows.reduce((a, b) => (b.generated_kwh < a.generated_kwh ? b : a));
+        document.getElementById("streak-best").textContent = `${fmtNum(best.generated_kwh)} kWh · ${best.date}`;
+        document.getElementById("streak-worst").textContent = `${fmtNum(worst.generated_kwh)} kWh · ${worst.date}`;
+      } else {
+        document.getElementById("streak-best").textContent = "--";
+        document.getElementById("streak-worst").textContent = "--";
+      }
+
+      // Rendimento (kWh/kWp) deste período vs. o anterior
+      if (summ.installed_power_kwp) {
+        document.getElementById("yield-current").textContent = `${fmtNum(data.total_kwh / summ.installed_power_kwp)} kWh/kWp`;
+        document.getElementById("yield-previous").textContent = data.previous_total_kwh
+          ? `${fmtNum(data.previous_total_kwh / summ.installed_power_kwp)} kWh/kWp`
+          : "--";
+      }
+
       const tbody = document.getElementById("hist-table-body");
       tbody.innerHTML = "";
       [...data.rows].reverse().forEach(row => {
@@ -1062,11 +1212,67 @@
       });
     }
 
+    async function loadSaudeReliability() {
+      const r = await fetch("/api/collector-health?days=30");
+      const d = await r.json();
+      const paint = (inv, pctId, detailId) => {
+        const s = d[inv];
+        const pctEl = document.getElementById(pctId);
+        const detailEl = document.getElementById(detailId);
+        if (!s || s.reliability_pct === null || s.reliability_pct === undefined) {
+          pctEl.textContent = "--";
+          detailEl.textContent = "";
+          return;
+        }
+        pctEl.textContent = `${fmtNum(s.reliability_pct)}%`;
+        pctEl.style.color = s.reliability_pct >= 95 ? "var(--good)" : (s.reliability_pct >= 80 ? "var(--ink-2)" : "var(--critical)");
+        detailEl.textContent = `${s.total_cycles - s.failed_cycles} de ${s.total_cycles} coletas nos últimos 30 dias`;
+      };
+      paint("huawei", "rel-huawei-pct", "rel-huawei-detail");
+      paint("foxess", "rel-foxess-pct", "rel-foxess-detail");
+    }
+
+    const INVERTER_CAPACITY_KWP = { huawei: 3.0, foxess: 5.0 };
+
+    async function loadSaudeContrib(range) {
+      const r = await fetch(`/api/history/inverters?range=${range}`);
+      const d = await r.json();
+      const huaweiKwh = d.rows.reduce((s, row) => s + (row.huawei_kwh || 0), 0);
+      const foxessKwh = d.rows.reduce((s, row) => s + (row.foxess_kwh || 0), 0);
+      const totalKwh = huaweiKwh + foxessKwh;
+      const totalCapacity = INVERTER_CAPACITY_KWP.huawei + INVERTER_CAPACITY_KWP.foxess;
+      const huaweiExpectedPct = (INVERTER_CAPACITY_KWP.huawei / totalCapacity) * 100;
+      const foxessExpectedPct = (INVERTER_CAPACITY_KWP.foxess / totalCapacity) * 100;
+      const huaweiRealPct = totalKwh ? (huaweiKwh / totalKwh) * 100 : null;
+      const foxessRealPct = totalKwh ? (foxessKwh / totalKwh) * 100 : null;
+
+      document.getElementById("contrib-huawei-real").textContent = huaweiRealPct !== null ? `${fmtNum(huaweiRealPct)}%` : "--";
+      document.getElementById("contrib-huawei-expected").textContent = `esperado ${fmtNum(huaweiExpectedPct)}% · ${fmtNum(huaweiKwh)} kWh`;
+      document.getElementById("contrib-foxess-real").textContent = foxessRealPct !== null ? `${fmtNum(foxessRealPct)}%` : "--";
+      document.getElementById("contrib-foxess-expected").textContent = `esperado ${fmtNum(foxessExpectedPct)}% · ${fmtNum(foxessKwh)} kWh`;
+
+      const bar = document.getElementById("contrib-split-bar");
+      bar.innerHTML = totalKwh
+        ? `<div style="width:${huaweiRealPct}%;background:#3987e5"></div><div style="width:${foxessRealPct}%;background:#199e70"></div>`
+        : "";
+    }
+
     let saudeInited = false;
     function initSaudeTab() {
       if (saudeInited) return;
       saudeInited = true;
       loadSaudeTab();
+      loadSaudeReliability();
+      loadSaudeContrib("dia");
+
+      document.getElementById("saude-contrib-toggle").addEventListener("click", (e) => {
+        const span = e.target.closest("span[data-range]");
+        if (!span) return;
+        e.currentTarget.querySelectorAll("span").forEach(s => s.classList.remove("active"));
+        span.classList.add("active");
+        loadSaudeContrib(span.dataset.range);
+      });
+
       wireCollapsibles("#tab-saude");
     }
 

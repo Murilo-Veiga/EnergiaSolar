@@ -372,7 +372,7 @@ def forecast():
     return _forecast_days()
 
 
-RANGE_DAYS = {"semana": 7, "mes": 30, "ano": 365}
+RANGE_DAYS = {"dia": 1, "semana": 7, "mes": 30, "ano": 365}
 
 
 def _period_total_kwh(days: int, start_offset_days: int = 0) -> float:
@@ -483,25 +483,57 @@ def history_records():
 
 RANGE_LABEL_PDF = {"semana": "Últimos 7 dias", "mes": "Últimos 30 dias", "ano": "Últimos 12 meses"}
 
+# Capacidade instalada por inversor (ver "Detalhes da instalação" no README)
+# — constante, não muda com o tempo, por isso não vem de nenhuma API.
+INVERTER_CAPACITY_KWP = {"huawei": 3.0, "foxess": 5.0}
+
+
+def _pct_delta(current, previous):
+    if not previous:
+        return None
+    pct = round((current - previous) / previous * 100)
+    arrow = "▲" if pct >= 0 else "▼"
+    return f"{arrow} {abs(pct)}% vs. período anterior"
+
 
 @app.get("/api/history/report.pdf")
 def history_report_pdf(range: str = "mes"):
     data = history(range)
+    records = history_records()
+    inverters = history_inverters(range)
+    annotations = list_annotations(range)
     installed_kwp = _last_value("plant_status", "installed_power_kwp", "-30d")
 
-    delta_label = None
-    if data["previous_total_kwh"]:
-        pct = round((data["total_kwh"] - data["previous_total_kwh"]) / data["previous_total_kwh"] * 100)
-        arrow = "▲" if pct >= 0 else "▼"
-        delta_label = f"{arrow} {abs(pct)}% vs. período anterior"
+    rows = data["rows"]
+    best_row = max(rows, key=lambda r: r["generated_kwh"] or 0) if rows else None
+    avg_daily_kwh = (data["total_kwh"] / len(rows)) if rows else None
+
+    huawei_kwh = sum(r["huawei_kwh"] or 0 for r in inverters["rows"])
+    foxess_kwh = sum(r["foxess_kwh"] or 0 for r in inverters["rows"])
+    total_capacity = sum(INVERTER_CAPACITY_KWP.values())
 
     pdf_bytes = build_history_report_pdf(
         period_label=RANGE_LABEL_PDF.get(range, "Período selecionado"),
-        rows=data["rows"],
+        generated_at=datetime.now(),
+        rows=rows,
         total_kwh=data["total_kwh"],
         total_brl=data["total_brl"] or 0.0,
         installed_kwp=installed_kwp,
-        delta_label=delta_label,
+        avg_daily_kwh=avg_daily_kwh,
+        kwh_delta_label=_pct_delta(data["total_kwh"], data["previous_total_kwh"]),
+        brl_delta_label=_pct_delta(data["total_brl"] or 0, data["previous_total_brl"] or 0),
+        best_day_period=best_row,
+        best_day_alltime={"date": records["best_day_date"], "kwh": records["best_day_kwh"]},
+        peak_power_alltime={"kw": records["peak_power_kw"], "at": records["peak_power_at"]},
+        inverter_split={
+            "huawei_kwh": huawei_kwh,
+            "foxess_kwh": foxess_kwh,
+            "huawei_expected_pct": round(INVERTER_CAPACITY_KWP["huawei"] / total_capacity * 100, 1),
+            "foxess_expected_pct": round(INVERTER_CAPACITY_KWP["foxess"] / total_capacity * 100, 1),
+            "days_with_data": len(inverters["rows"]),
+            "days_in_period": len(rows),
+        },
+        annotations=annotations["rows"],
     )
     return Response(
         content=pdf_bytes,
@@ -535,6 +567,33 @@ def history_inverters(range: str = "mes"):
         for date, vals in sorted(by_day.items())
     ]
     return {"rows": rows}
+
+
+@app.get("/api/collector-health")
+def collector_health_reliability(days: int = 30):
+    """% de ciclos de coleta sem falha, por inversor — usa o measurement
+    collector_health, que já grava 1 ponto por ciclo (sucesso ou falha) pra
+    sempre, sem sobrescrever (ver "Falhas de coleta e fallback seguro").
+    Não precisa de nenhuma coleta nova, só nunca foi exposto antes."""
+    result = {}
+    for inverter in ("huawei", "foxess"):
+        flux = f'''
+        from(bucket: "{INFLUX_BUCKET}")
+          |> range(start: -{days}d)
+          |> filter(fn: (r) => r._measurement == "collector_health" and r._field == "consecutive_failures" and r.inverter == "{inverter}" and r.plant_id == "{PLANT_TAG}")
+        '''
+        total = failed = 0
+        for table in query_api.query(flux):
+            for record in table.records:
+                total += 1
+                if (record.get_value() or 0) > 0:
+                    failed += 1
+        result[inverter] = {
+            "total_cycles": total,
+            "failed_cycles": failed,
+            "reliability_pct": round((total - failed) / total * 100, 1) if total else None,
+        }
+    return result
 
 
 class AnnotationIn(BaseModel):

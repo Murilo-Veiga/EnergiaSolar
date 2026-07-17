@@ -333,23 +333,33 @@ alerta original usa `overflow: hidden`, que cortava o tooltip; ver
 | Quanto gerou | "☀ Quanto sua usina gerou" | `/api/history` — aberta por padrão |
 | Quanto economizou | "💰 Quanto você economizou" | `/api/history` (mesmo campo `valor_estimado_brl` de sempre, agora com bloco próprio em vez de escondido atrás do toggle Gerado/Economia) |
 | Recordes | "🏆 Seus melhores dias e meses" | `/api/history/records` — melhor dia, melhor mês (`aggregateWindow(every: 1mo)`), maior potência já vista — sempre desde que a usina ligou, independe do período selecionado |
+| Sequência acima da média | "📈 Sequência de dias acima da média" | Deriva de `/api/history` no cliente — nenhum endpoint novo. Conta quantos dias mais recentes seguidos ficaram acima da média de geração do período selecionado, e mostra o melhor/pior dia de dentro desse mesmo período |
+| Rendimento vs. período anterior | "☀ Rendimento comparado ao período anterior" | `total_kwh` / `installed_power_kwp` do período atual vs. `previous_total_kwh` / `installed_power_kwp` — kWh por kW instalado é mais justo que comparar só o total porque não depende do tamanho do período |
 | Anotações | "📌 Anotações sobre eventos importantes" | `POST`/`GET /api/annotations` — 1 nota por dia (gravar de novo no mesmo dia sobrescreve), measurement `annotation` dedicado |
 
-O seletor de período (Semana/Mês/Ano, no topo da aba) atualiza os 2
-primeiros blocos e a tabela; Recordes e Anotações são sempre all-time.
-`/api/history` também retorna `previous_total_kwh`/`previous_total_brl`
-(mesma duração, período imediatamente anterior) pra mostrar "▲ 12% a mais
-que no período anterior" — quando o período anterior é zero (ex.: antes da
-usina ligar), a comparação não aparece em vez de mostrar um percentual sem
-sentido.
+O seletor de período (Semana/Mês/Ano, no topo da aba) atualiza os blocos
+de geração/economia/sequência/rendimento e a tabela; Recordes e Anotações
+são sempre all-time. `/api/history` também retorna
+`previous_total_kwh`/`previous_total_brl` (mesma duração, período
+imediatamente anterior) pra mostrar "▲ 12% a mais que no período
+anterior" — quando o período anterior é zero (ex.: antes da usina ligar),
+a comparação não aparece em vez de mostrar um percentual sem sentido.
 
 **Relatório em PDF**: botão único no topo da aba (`GET
-/api/history/report.pdf?range=X`), cobre geração + economia do mesmo
-período num só documento — gerado com `reportlab` (`webapp/report_pdf.py`),
-desenhado direto via `canvas` (sem HTML→PDF) pra evitar dependência de
-sistema tipo Cairo/Pango. Layout de página única, sem paginação: gráficos
-de barra mostram só os últimos 60 dias do período e a tabela só os últimos
-10 — pensado como demonstrativo simples, não um extrato completo.
+/api/history/report.pdf?range=X`), gerado com `reportlab`
+(`webapp/report_pdf.py`), desenhado direto via `canvas` (sem HTML→PDF) pra
+evitar dependência de sistema tipo Cairo/Pango. Layout de página única,
+sem paginação: gráficos de barra mostram só os últimos 60 dias do período
+e a tabela só os últimos 10. Cabeçalho traz a data/hora exata de geração
+do relatório em destaque; os 3 blocos de resumo (energia gerada, economia,
+rendimento kWh/kWp) mostram o percentual de variação vs. o período
+anterior, colorido em verde (▲) ou vermelho (▼); um painel de recordes
+mostra melhor dia do período, melhor dia histórico e maior potência já
+registrada; os gráficos de barra rotulam valor e data em cada barra
+(desligado acima de 31/15 barras respectivamente, pra não poluir períodos
+longos); uma seção mostra a contribuição real de cada inversor (kWh e %)
+comparada ao esperado pela capacidade instalada; anotações do período
+(até 6) aparecem antes da tabela.
 
 ## Menu "Saúde da usina"
 
@@ -360,13 +370,24 @@ de design".
 
 | Seção | Título exibido | Fonte |
 |---|---|---|
-| Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` |
+| Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` — gráfico empilhado, sempre no mês |
+| Contribuição real vs. esperada | "🎯 Contribuição real vs. esperada pela capacidade" | `/api/history/inverters?range=X`, com seletor Dia/Semana/Mês/Ano — compara o % real gerado por cada inversor com o % esperado só pela capacidade instalada (Huawei 3 kW = 37,5%, FoxESS 5 kW = 62,5%), pra notar se um lado está rendendo menos que deveria |
+| Confiabilidade da coleta | "🛡 Confiabilidade da coleta de dados" | `/api/collector-health?days=30` — % de ciclos de coleta sem falha nos últimos 30 dias, por inversor |
 
 `/api/history/inverters` **não precisou de nenhum dado novo do coletor**:
 deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
 `BRAZIL_TZ`, igual ao collector), por inversor — o mesmo princípio que já
 vale pro `daily_generation` (o último valor do dia é o total do dia), só
-que aplicado por inversor em vez do total da usina.
+que aplicado por inversor em vez do total da usina. O seletor
+Dia/Semana/Mês/Ano usa o mesmo `RANGE_DAYS` (janela corrida, não
+alinhada ao calendário) do resto do painel — com pouco histórico
+acumulado (usina ligou 13/07/2026), os 4 períodos podem mostrar o mesmo
+resultado até existir mais de ~7 dias de dado.
+
+`/api/collector-health` também **não precisou de coleta nova**: o
+measurement `collector_health` já grava 1 ponto por ciclo (sucesso ou
+falha) desde sempre — ver "Falhas de coleta e fallback seguro" — só nunca
+tinha sido exposto num endpoint.
 
 **Ainda não implementado** (aprovado no mockup, mas depende de dado novo da
 Huawei — mexe exatamente na área que já causou o incidente de rate limit
@@ -482,9 +503,12 @@ inventar de novo a cada novidade:
   — comparando a data registrada com a data atual, sem precisar de nenhum
   lembrete manual pra tirar depois dos 5 dias.
 
-Exemplos já em uso: o menu "Saúde da usina" (`nav-saude`) e o clima
-recalculado nas horas de sol (`clima-horas-de-sol`), os dois adicionados em
-2026-07-16 — ver "Menu Saúde da usina" e "Status do dia: clima e previsão".
+Exemplos já em uso, todos adicionados em 2026-07-16: o menu "Saúde da
+usina" (`nav-saude`), o clima recalculado nas horas de sol
+(`clima-horas-de-sol`), e as 4 seções novas de Histórico/Saúde da usina
+(`hist-streak`, `hist-yield`, `saude-reliability`, `saude-contrib-range`)
+— ver "Aba Histórico", "Menu Saúde da usina" e "Status do dia: clima e
+previsão".
 
 ## Estrutura do projeto
 
@@ -511,10 +535,11 @@ recalculado nas horas de sol (`clima-horas-de-sol`), os dois adicionados em
 | `GET /api/summary` | KPIs atuais: potência, geração/economia do dia (+ variação % vs. ontem), pico do dia + horário, status |
 | `GET /api/inverters` | Potência/geração/temperatura/status (gerando, online sem geração, sem comunicação) por inversor, + `consecutive_failures`/`last_error` da coleta |
 | `GET /api/day-status` | Status do dia: clima (recalculado nas horas de sol), irradiância, nuvens por hora, sol, alarme (+ detalhe), geração, bandeira vigente |
-| `GET /api/history?range=semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) e `previous_total_kwh`/`previous_total_brl` do período anterior |
+| `GET /api/history?range=dia\|semana\|mes\|ano` | Série de geração no período + `total_kwh`/`total_brl` (estimado) e `previous_total_kwh`/`previous_total_brl` do período anterior |
 | `GET /api/history/records` | Recordes all-time: melhor dia, melhor mês, maior potência já vista |
-| `GET /api/history/inverters?range=X` | Geração diária por inversor (Huawei/FoxESS), derivada do `inverter_status` já coletado |
-| `GET /api/history/report.pdf?range=X` | Relatório em PDF (geração + economia do período) pra download |
+| `GET /api/history/inverters?range=dia\|semana\|mes\|ano` | Geração diária por inversor (Huawei/FoxESS), derivada do `inverter_status` já coletado |
+| `GET /api/history/report.pdf?range=X` | Relatório em PDF enriquecido (recordes do período, contribuição por inversor, anotações, rendimento, deltas vs. período anterior) pra download |
+| `GET /api/collector-health?days=30` | % de ciclos de coleta sem falha por inversor, derivado do `collector_health` já gravado a cada ciclo |
 | `POST /api/annotations` | Grava uma anotação (`date`, `note`) — 1 por dia, sobrescreve se já existir |
 | `GET /api/annotations?range=X` | Lista anotações do período, mais recente primeiro |
 | `GET /api/forecast` | Previsão do tempo 5 dias (Open-Meteo, sem API key, mesmo cache de 2h do `/api/day-status`) |
