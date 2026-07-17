@@ -119,7 +119,7 @@ Documentação oficial: https://www.foxesscloud.com/public/i18n/en/OpenApiDocume
 
 Cada inversor é coletado num `try/except` isolado (ver "Status por
 inversor"), mas uma falha pontual na API não pode fazer o painel mentir sobre
-o que já foi gerado. Duas proteções em `collector/main.py`:
+o que já foi gerado. Três proteções em `collector/main.py`:
 
 - **`_carry_forward_day_kwh`**: geração diária só cresce, então quando a
   consulta de um inversor falha nesse ciclo, o total "Gerado hoje"
@@ -137,6 +137,13 @@ o que já foi gerado. Duas proteções em `collector/main.py`:
   "Design do painel").
   Isso é gravado mesmo se os dois inversores falharem no mesmo ciclo — é
   justamente aí que o alerta mais importa.
+- **`_seed_daily_state_from_influx`**: no startup, reconstrói o estado do
+  "dia já começou" (`_daily_reset_state`/`_last_known_day_kwh`) a partir do
+  último ponto de `inverter_status.day_kwh` gravado hoje no InfluxDB, em vez
+  de assumir que a memória zerada do processo significa "dia não começou"
+  (ver incidente abaixo). Só semeia se já existir um ponto de hoje — se não
+  existir (dia realmente não começou), o comportamento de sempre (zerar até
+  ver `power_kw > 0`) continua valendo.
 
 **Caso real que motivou isso** (2026-07-16): `getAlarmList` da Huawei tem um
 limite de taxa mais restrito que os outros endpoints (ver "Fontes de dados
@@ -147,6 +154,23 @@ alarme (roda a cada 900s, isolado — uma falha nele não derruba mais
 `power_kw`/`day_kwh` do ciclo); o fallback acima é a camada de segurança
 que garante que qualquer falha residual, nesse ou em qualquer outro endpoint,
 nunca faz o total regredir.
+
+**Incidente real que motivou o 3º item** (2026-07-17, 18:21 BRT): um restart
+do container `collector` (deploy de rotina) aconteceu bem quando o sol
+estava se pondo, com `power_kw` momentaneamente em 0. `_apply_daily_reset_guard`
+tratou o dia inteiro como "ainda não começou" (sua flag `started` vive só em
+memória, e tinha acabado de resetar com o restart) e zerou um `day_kwh` que
+já era real: Huawei 7,16 kWh e FoxESS 17,9 kWh, acumulados desde a manhã.
+Sem sol remanescente pra `power_kw` voltar a ficar `> 0` naquele dia, o zero
+ficou travado em "Gerado hoje" pelo resto da tarde/noite — só descoberto pelo
+usuário olhando o painel. Corrigido com `_seed_daily_state_from_influx`
+(acima) e o total de 2026-07-17 foi restaurado manualmente pra 25,06 kWh
+(7,16 + 17,9, os últimos valores reais confirmados no InfluxDB antes do
+restart). **Risco residual**: se o container reiniciar num momento em que
+nenhum ponto de hoje ainda existe no InfluxDB (ex.: bem no início do dia,
+antes do 1º ciclo bem-sucedido), a proteção não tem o que semear — mas nesse
+caso o dia também não tinha gerado nada de verdade ainda, então zerar
+continua sendo o comportamento correto.
 
 ## Limitações conhecidas
 

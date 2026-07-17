@@ -54,9 +54,17 @@ def _apply_daily_reset_guard(inverter: str, power_kw: float, day_kwh: float) -> 
     zero. Sem um campo de "última atualização" confiável pra esse valor
     específico, usamos geração real (power_kw > 0) como prova de que o
     inversor já acordou hoje — até isso acontecer, tratamos o dia como
-    zerado. Estado por inversor, reiniciado a cada troca de dia local; some
-    num restart do container, o que na pior hipótese só reseta a marca de
-    "já gerou hoje" (segura, volta a True no próximo ciclo com sol)."""
+    zerado. Estado por inversor, reiniciado a cada troca de dia local.
+
+    INCIDENTE 2026-07-17: esse estado vive só em memória — um restart do
+    container que aconteça DEPOIS que a usina já gerou hoje, mas num momento
+    em que power_kw está momentaneamente 0 (pôr do sol, ou uma nuvem passando
+    ao meio-dia), fazia essa função tratar o dia inteiro como "ainda não
+    começou" e zerar um day_kwh que já era real e positivo — sem sol
+    remanescente pra "started" virar True de novo, o zero ficava travado pro
+    resto do dia. Corrigido semeando `_daily_reset_state`/`_last_known_day_kwh`
+    a partir do InfluxDB no startup (ver `_seed_daily_state_from_influx`), não
+    mais assumindo que um restart só acontece de manhã antes do sol nascer."""
     today = datetime.now(BRAZIL_TZ).date()
     state = _daily_reset_state.setdefault(inverter, {"date": today, "started": False})
     if state["date"] != today:
@@ -65,6 +73,40 @@ def _apply_daily_reset_guard(inverter: str, power_kw: float, day_kwh: float) -> 
     if power_kw > 0:
         state["started"] = True
     return day_kwh if state["started"] else 0.0
+
+
+def _seed_daily_state_from_influx(query_api, bucket: str) -> None:
+    """Reconstrói `_daily_reset_state`/`_last_known_day_kwh` a partir do
+    InfluxDB no startup do coletor — sem isso, um restart do container
+    (deploy, crash, `restart: unless-stopped`) que aconteça depois que a
+    usina já gerou hoje, mas com power_kw momentaneamente em 0, zera um
+    day_kwh que já era real (ver incidente em `_apply_daily_reset_guard`).
+
+    Só semeia se já existir um ponto de `inverter_status.day_kwh` gravado
+    HOJE (fuso BRT) — cada ponto gravado hoje já passou pelo guard em tempo
+    real antes de ser escrito, então reaproveitar o último é sempre seguro:
+    nunca reintroduz o problema original de mostrar sobra de ontem antes do
+    inversor acordar (se hoje ainda não tem nenhum ponto, não semeia nada, e
+    o guard segue tratando o dia como zerado, correto nesse caso)."""
+    today = datetime.now(BRAZIL_TZ).date()
+    start_of_today_utc = datetime.combine(today, datetime.min.time(), tzinfo=BRAZIL_TZ).astimezone(timezone.utc)
+    for inverter in ("huawei", "foxess"):
+        flux = f'''
+        from(bucket: "{bucket}")
+          |> range(start: {start_of_today_utc.isoformat()})
+          |> filter(fn: (r) => r._measurement == "inverter_status" and r.inverter == "{inverter}" and r.plant_id == "{PLANT_TAG}" and r._field == "day_kwh")
+          |> sort(columns: ["_time"], desc: true)
+          |> limit(n: 1)
+        '''
+        try:
+            for table in query_api.query(flux):
+                for record in table.records:
+                    value = record.get_value()
+                    _last_known_day_kwh[inverter] = {"date": today, "value": value}
+                    _daily_reset_state[inverter] = {"date": today, "started": True}
+                    log.info("Estado do dia recuperado do InfluxDB pra %s: day_kwh=%.2f", inverter, value)
+        except Exception:
+            log.exception("Falha ao recuperar estado do dia do InfluxDB pra %s (segue com estado zerado)", inverter)
 
 
 def _carry_forward_day_kwh(inverter: str, day_kwh: float | None) -> float:
@@ -325,6 +367,8 @@ def main():
         org=org,
     )
     write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+    query_api = influx_client.query_api()
+    _seed_daily_state_from_influx(query_api, bucket)
 
     # Retry com espera na descoberta inicial: se isso levantar exceção sem
     # tratamento, o container reinicia instantaneamente (restart:
