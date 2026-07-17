@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import date as date_type
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,9 @@ from pydantic import BaseModel, Field
 
 from celesc_bill_parser import CelescBillParseError, parse_bill
 from report_pdf import build_history_report_pdf
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("webapp")
 
 INFLUX_URL = os.environ["INFLUXDB_URL"]
 INFLUX_TOKEN = os.environ["INFLUXDB_TOKEN"]
@@ -90,6 +94,47 @@ def _hour_in_daylight(hour_index: int, sunrise_hhmm: str, sunset_hhmm: str) -> b
 _FORECAST_CACHE_TTL = timedelta(hours=2)
 _forecast_cache: dict = {"data": None, "fetched_at": None}
 
+# Quantos dias já encerrados pedir de volta pra Open-Meteo (`past_days`) além
+# da janela de previsão — são dias com irradiância/clima REAIS (observados),
+# não previsão, e ficam arquivados no InfluxDB (ver `_persist_past_weather`)
+# pra dar base a análises futuras (Performance Ratio, radiação vs. geração —
+# ver README > "Menu Saúde da usina"). Sem isso, esse dado nunca era salvo em
+# lugar nenhum e se perdia assim que o cache de 2h expirava. Usamos 3 (não 1)
+# de folga: como a gravação só acontece quando alguém abre o painel, isso
+# recupera dias perdidos se o painel ficar >1 dia sem ser aberto — reescrever
+# um dia já arquivado é seguro (mesmo timestamp, sobrescreve em vez de duplicar).
+PAST_DAYS_TO_ARCHIVE = 3
+
+
+def _persist_past_weather(past_days: list[dict]) -> None:
+    """Grava 1 ponto por dia (measurement `weather_daily`) pros dias já
+    encerrados devolvidos pela Open-Meteo via `past_days`. Timestamp fixo na
+    meia-noite BRT de cada dia — mesmo padrão do `daily_generation` do
+    collector — faz uma gravação repetida do mesmo dia sobrescrever o ponto
+    existente em vez de criar duplicata, por isso é seguro rechamar a cada
+    refresh de cache sem checar antes se o dia já foi arquivado. Falha aqui
+    não pode derrubar `/api/forecast`/`/api/day-status` — é só arquivamento,
+    o dado de previsão em si já foi obtido com sucesso a essa altura.
+    """
+    try:
+        points = []
+        for day in past_days:
+            day_midnight_brt = datetime.strptime(day["date"], "%Y-%m-%d").replace(tzinfo=BRAZIL_TZ)
+            points.append(
+                Point("weather_daily")
+                .tag("plant_id", PLANT_TAG)
+                .field("weather", day["weather"])
+                .field("solar_radiation_mj_m2", day["solar_radiation_mj_m2"])
+                .field("temp_max_c", day["temp_max"])
+                .field("temp_min_c", day["temp_min"])
+                .field("precipitation_mm", day["precipitation_mm"])
+                .field("precipitation_probability_pct", day["precipitation_probability_pct"])
+                .time(day_midnight_brt.astimezone(timezone.utc))
+            )
+        write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=points)
+    except Exception:
+        log.exception("Falha ao arquivar clima/irradiancia de dias passados (previsao seguiu normalmente)")
+
 
 def _forecast_days():
     now = datetime.now(timezone.utc)
@@ -106,6 +151,7 @@ def _forecast_days():
             "sunrise,sunset",
             "hourly": "weathercode,cloudcover",
             "timezone": "America/Sao_Paulo",
+            "past_days": PAST_DAYS_TO_ARCHIVE,
             "forecast_days": 5,
         },
         timeout=10,
@@ -114,6 +160,11 @@ def _forecast_days():
     data = resp.json()
     daily = data["daily"]
     hourly = data["hourly"]
+
+    # Com `past_days`, os primeiros PAST_DAYS_TO_ARCHIVE itens de daily["time"]
+    # são dias já encerrados (passado real), não previsão — "hoje" passa a
+    # ficar no índice PAST_DAYS_TO_ARCHIVE em vez de 0.
+    today_index = PAST_DAYS_TO_ARCHIVE
 
     days = []
     for i, date in enumerate(daily["time"]):
@@ -135,7 +186,7 @@ def _forecast_days():
             "sunset": sunset,
         }
 
-        if i == 0:
+        if i == today_index:
             # "weather" (acima) resume as 24h do dia inteiro — inclui madrugada/noite,
             # que não afeta geração solar nenhuma. Pro card "Status do dia" (só hoje),
             # recalculamos usando só as horas entre nascer e pôr do sol, que é o que
@@ -159,6 +210,9 @@ def _forecast_days():
             day["cloudcover_hourly"] = hour_clouds
 
         days.append(day)
+
+    _persist_past_weather(days[:today_index])
+    days = days[today_index:]
 
     _forecast_cache["data"] = days
     _forecast_cache["fetched_at"] = now

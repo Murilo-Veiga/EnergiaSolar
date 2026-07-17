@@ -11,7 +11,9 @@ FoxESS Cloud) — sem depender de nenhum acesso de usuário de terceiros.
 [Falhas de coleta e fallback seguro](#falhas-de-coleta-e-fallback-seguro) ·
 [Limitações conhecidas](#limitações-conhecidas) ·
 [Design do painel](#design-do-painel) ·
-[Aba Histórico](#aba-histórico) · [Menu Saúde da usina](#menu-saúde-da-usina) ·
+[Aba Histórico](#aba-histórico) ·
+[Arquivamento de clima/irradiância](#arquivamento-de-climairradiância) ·
+[Menu Saúde da usina](#menu-saúde-da-usina) ·
 [Consumo por unidade consumidora](#consumo-por-unidade-consumidora-celesc) ·
 [Princípio de design](#princípio-de-design-fácil-de-ler-pra-qualquer-idade) ·
 [Selo "novo"](#regra-selo-novo-por-5-dias) ·
@@ -397,6 +399,43 @@ longos); uma seção mostra a contribuição real de cada inversor (kWh e %)
 comparada ao esperado pela capacidade instalada; anotações do período
 (até 6) aparecem antes da tabela.
 
+## Arquivamento de clima/irradiância
+
+**Corrigido em 2026-07-17** (ver "Auditoria" acima): a Open-Meteo já era
+consultada pelo `webapp` (`_forecast_days()`) pra alimentar o card "Status do
+dia", mas o resultado só vivia no cache de 2h em memória — nunca era salvo,
+então o clima/irradiância de qualquer dia passado se perdia pra sempre assim
+que o cache expirava. Sem esse histórico, não dá pra calcular Performance
+Ratio nem comparar radiação vs. geração real de um dia específico (ver
+"Menu Saúde da usina" abaixo — são métricas aprovadas no mockup mas ainda
+não implementadas, e dependiam desse dado existir).
+
+- A mesma chamada que já era feita ganhou o parâmetro `past_days=3`
+  (`PAST_DAYS_TO_ARCHIVE` em `webapp/main.py`) — a Open-Meteo passa a
+  devolver, além da janela de previsão de sempre (hoje + 4 dias), os 3 dias
+  anteriores já **encerrados e observados** (não previsão). "Hoje" muda de
+  índice (`today_index = PAST_DAYS_TO_ARCHIVE`) no array retornado pela API,
+  mas a fatia devolvida pro resto do código (`/api/forecast`, `/api/day-status`)
+  continua exatamente a mesma de antes (hoje + 4 dias) — o corte acontece
+  antes de cachear/retornar, então nenhum consumidor existente precisou mudar.
+- `_persist_past_weather()` grava 1 ponto por dia (measurement `weather_daily`,
+  tag `plant_id`) pros dias já encerrados, com timestamp fixo na meia-noite
+  BRT de cada dia — mesmo truque do `daily_generation` do collector, uma nova
+  gravação do mesmo dia sobrescreve o ponto em vez de duplicar. Roda a cada
+  refresh do cache (a cada 2h, só quando alguém tem o painel aberto — não há
+  processo em background/agendado).
+- **Janela de 3 dias, não 1**: como a gravação só acontece quando o painel é
+  acessado, usar só "ontem" deixaria um buraco se o painel ficasse mais de 1
+  dia sem ser aberto. Com 3 dias de folga, o próximo acesso recupera os dias
+  perdidos sozinho (reescrever um dia já arquivado é seguro, ver acima) — mas
+  ainda existe uma janela real de perda se o painel ficar **mais de 3 dias**
+  sem ser aberto nenhuma vez; não há garantia absoluta sem um processo
+  agendado próprio, que não foi implementado por ora (baixo custo de decidir
+  depois, dado que o painel é usado diariamente).
+- Falha ao gravar (`write_api.write`) é capturada e logada, sem derrubar
+  `/api/forecast`/`/api/day-status` — é só arquivamento, a previsão em si já
+  foi obtida com sucesso a essa altura.
+
 ## Menu "Saúde da usina"
 
 Separado do Histórico depois que o usuário notou que "Histórico" estava
@@ -728,7 +767,7 @@ daqui 12 meses**:
 
 | Achado | Severidade | Ação sugerida |
 |---|---|---|
-| Clima/irradiância não é persistido | Alto (janela de oportunidade perdida todo dia) | Gravar 1 ponto/dia no InfluxDB com o que a Open-Meteo já retorna |
+| ~~Clima/irradiância não é persistido~~ | ~~Alto~~ | **Corrigido em 2026-07-17** — ver "Arquivamento de clima/irradiância" |
 | ~~"Pico hoje" é janela rolante de 24h, não por dia-calendário~~ | ~~Médio~~ | **Corrigido em 2026-07-17** |
 | `refreshAlerts` duplica 3 chamadas que já existem | Baixo (desperdício, não incorreção) | Reaproveitar os fetches dos outros timers em vez de refazer |
 | "▼ 100% vs. ontem" todo início de manhã | Baixo (correto, mas pouco útil) | Considerar esconder o indicador antes do nascer do sol |
