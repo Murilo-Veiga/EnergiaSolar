@@ -296,6 +296,37 @@
   .upload-status { font-size: 11px; color: var(--ink-muted); margin-bottom: 12px; min-height: 14px; }
 
   .tab-view[hidden] { display: none; }
+
+  /* ---- responsivo (celular) — o painel foi desenhado desktop-first (sidebar
+     fixa de 220px), então abaixo de ~780px a barra lateral vira uma tira
+     horizontal no topo e as grades de 2-3 colunas empilham numa só coluna.
+     Os grids que recebem `grid-template-columns` inline (várias instâncias
+     de .day-grid/.hero-row com largura de coluna customizada) precisam de
+     !important aqui pra vencer o style inline nessa faixa de tela. ---- */
+  @media (max-width: 780px) {
+    .app { flex-direction: column; height: auto; min-height: 100%; }
+    .sidebar {
+      width: 100%; border-right: none; border-bottom: 1px solid var(--border);
+      padding: 10px 12px; display: flex; align-items: center; gap: 12px;
+    }
+    .brand { border-bottom: none; margin-bottom: 0; padding: 0; flex-shrink: 0; }
+    .brand .sub { display: none; }
+    .nav { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex: 1; min-width: 0; }
+    .nav a { flex-shrink: 0; margin-bottom: 0; white-space: nowrap; }
+
+    .main { padding: 16px 14px; }
+    .topbar { flex-wrap: wrap; row-gap: 6px; margin-bottom: 18px; }
+    .topbar h2 { font-size: 17px; }
+
+    .hero-row, .inv-row, .day-grid { grid-template-columns: 1fr !important; }
+    .hero-card .v { font-size: 34px; }
+
+    .day-timeline { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+    .tl-day { flex: 0 0 118px; }
+
+    .uc-stats { flex-wrap: wrap; row-gap: 10px; }
+    .chart-head { row-gap: 10px; }
+  }
 </style>
 </head>
 <body>
@@ -600,10 +631,12 @@
           <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
             <h3 style="margin:0;font-size:13px;font-weight:600;color:var(--ink-2)">Histórico recente</h3>
           </div>
-          <table class="hist-table">
-            <thead><tr><th>Data</th><th>Gerado</th><th>Valor estimado</th></tr></thead>
-            <tbody id="hist-table-body"></tbody>
-          </table>
+          <div style="overflow-x:auto">
+            <table class="hist-table">
+              <thead><tr><th>Data</th><th>Gerado</th><th>Valor estimado</th></tr></thead>
+              <tbody id="hist-table-body"></tbody>
+            </table>
+          </div>
           <div style="padding:10px 20px;font-size:11px;color:var(--ink-muted)">Valor estimado = kWh × tarifa efetiva da fatura mais recente — mesma estimativa da aba Consumo.</div>
         </div>
       </div>
