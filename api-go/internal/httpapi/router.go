@@ -23,7 +23,17 @@ func NewRouter(s *Server) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(s.JWTSecret))
 		r.Get("/api/plants", s.handleListPlants)
-		r.Get("/api/plants/{plantID}", s.handleGetPlant)
+		r.Route("/api/plants/{plantID}", func(r chi.Router) {
+			r.Get("/", s.handleGetPlant)
+			r.Get("/summary", s.handleSummary)
+			r.Get("/inverters", s.handleInverters)
+			r.Get("/collector-health", s.handleCollectorHealth)
+			r.Get("/history", s.handleHistory)
+			r.Get("/history/records", s.handleHistoryRecords)
+			r.Get("/history/inverters", s.handleHistoryInverters)
+			r.Get("/annotations", s.handleListAnnotations)
+			r.Post("/annotations", s.handleCreateAnnotation)
+		})
 	})
 
 	return r

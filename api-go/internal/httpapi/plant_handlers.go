@@ -63,7 +63,7 @@ func (s *Server) handleGetPlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "falha ao consultar usina")
+		writeInternalError(w, err, "falha ao consultar usina")
 		return
 	}
 	writeJSON(w, http.StatusOK, plantResponse{
@@ -81,7 +81,7 @@ func (s *Server) handleListPlants(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "falha ao listar usinas")
+		writeInternalError(w, err, "falha ao listar usinas")
 		return
 	}
 	defer rows.Close()
@@ -90,7 +90,7 @@ func (s *Server) handleListPlants(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p plantResponse
 		if err := rows.Scan(&p.ID, &p.Name, &p.Lat, &p.Lon, &p.InstalledPowerKWp, &p.Timezone); err != nil {
-			writeError(w, http.StatusInternalServerError, "falha ao ler usinas")
+			writeInternalError(w, err, "falha ao ler usinas")
 			return
 		}
 		plants = append(plants, p)

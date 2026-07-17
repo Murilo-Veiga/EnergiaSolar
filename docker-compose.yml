@@ -90,8 +90,15 @@ services:
       PLANT_LAT: ${PLANT_LAT}
       PLANT_LON: ${PLANT_LON}
       PLANT_INSTALLED_POWER_KWP: ${PLANT_INSTALLED_POWER_KWP}
+      # Só usados pelo comando "migrate-influx" (docker compose run --entrypoint migrate-influx api-go)
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
+      TARGET_PLANT_ID: ${TARGET_PLANT_ID}
     depends_on:
       - postgres
+      - influxdb
 
 volumes:
   influxdb-data:
