@@ -640,16 +640,18 @@ def history_inverters(range: str = "mes"):
 
 
 @app.get("/api/collector-health")
-def collector_health_reliability(days: int = 30):
-    """% de ciclos de coleta sem falha, por inversor — usa o measurement
+def collector_health_reliability():
+    """% de ciclos de coleta sem falha, por inversor, no dia-calendário atual
+    (BRT, meia-noite até agora) — reseta sozinho a cada virada de dia, é um
+    monitoramento do dia corrente, não uma janela rolante. Usa o measurement
     collector_health, que já grava 1 ponto por ciclo (sucesso ou falha) pra
-    sempre, sem sobrescrever (ver "Falhas de coleta e fallback seguro").
-    Não precisa de nenhuma coleta nova, só nunca foi exposto antes."""
+    sempre, sem sobrescrever (ver "Falhas de coleta e fallback seguro")."""
+    start_of_today_brt = datetime.now(BRAZIL_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
     result = {}
     for inverter in ("huawei", "foxess"):
         flux = f'''
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -{days}d)
+          |> range(start: {start_of_today_brt.astimezone(timezone.utc).isoformat()})
           |> filter(fn: (r) => r._measurement == "collector_health" and r._field == "consecutive_failures" and r.inverter == "{inverter}" and r.plant_id == "{PLANT_TAG}")
         '''
         total = failed = 0

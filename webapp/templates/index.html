@@ -717,7 +717,7 @@
               <span class="icon-badge blue size-card" data-icon="shield"></span>
               <span class="tt">
                 <h3>Confiabilidade da coleta de dados<span data-new-key="saude-reliability"></span></h3>
-                <span class="tip tip-wide">De cada 100 tentativas de buscar dados nos inversores, quantas deram certo nos últimos 30 dias. Uma taxa baixa não significa que a usina parou — só que o painel teve mais dificuldade de consultar aquele inversor.</span>
+                <span class="tip tip-wide">De cada 100 tentativas de buscar dados nos inversores, quantas deram certo hoje (reseta à meia-noite). Uma taxa baixa não significa que a usina parou — só que o painel teve mais dificuldade de consultar aquele inversor.</span>
               </span>
             </div>
             <div class="alert-toggle-right"><span class="alert-chevron">▾</span></div>
@@ -1254,7 +1254,7 @@
     }
 
     async function loadSaudeReliability() {
-      const r = await fetch("/api/collector-health?days=30");
+      const r = await fetch("/api/collector-health");
       const d = await r.json();
       const paint = (inv, pctId, detailId) => {
         const s = d[inv];
@@ -1267,7 +1267,7 @@
         }
         pctEl.textContent = `${fmtNum(s.reliability_pct)}%`;
         pctEl.style.color = s.reliability_pct >= 95 ? "var(--good)" : (s.reliability_pct >= 80 ? "var(--ink-2)" : "var(--critical)");
-        detailEl.textContent = `${s.total_cycles - s.failed_cycles} de ${s.total_cycles} coletas nos últimos 30 dias`;
+        detailEl.textContent = `${s.total_cycles - s.failed_cycles} de ${s.total_cycles} coletas hoje`;
       };
       paint("huawei", "rel-huawei-pct", "rel-huawei-detail");
       paint("foxess", "rel-foxess-pct", "rel-foxess-detail");

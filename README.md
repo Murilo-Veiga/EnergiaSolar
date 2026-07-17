@@ -500,7 +500,7 @@ de design".
 |---|---|---|
 | Contribuição por inversor | "🔀 Quanto cada inversor contribuiu" | `/api/history/inverters` — gráfico empilhado, sempre no mês |
 | Contribuição real vs. esperada | "🎯 Contribuição real vs. esperada pela capacidade" | `/api/history/inverters?range=X`, com seletor Dia/Semana/Mês/Ano — compara o % real gerado por cada inversor com o % esperado só pela capacidade instalada (Huawei 3 kW = 37,5%, FoxESS 5 kW = 62,5%), pra notar se um lado está rendendo menos que deveria |
-| Confiabilidade da coleta | "🛡 Confiabilidade da coleta de dados" | `/api/collector-health?days=30` — % de ciclos de coleta sem falha nos últimos 30 dias, por inversor |
+| Confiabilidade da coleta | "🛡 Confiabilidade da coleta de dados" | `/api/collector-health` — % de ciclos de coleta sem falha **hoje** (dia-calendário BRT, reseta à meia-noite), por inversor |
 
 `/api/history/inverters` **não precisou de nenhum dado novo do coletor**:
 deriva do último `inverter_status.day_kwh` de cada dia-calendário (fuso
@@ -519,7 +519,12 @@ ontem-inteiro + hoje-parcial como se fosse só hoje.
 `/api/collector-health` também **não precisou de coleta nova**: o
 measurement `collector_health` já grava 1 ponto por ciclo (sucesso ou
 falha) desde sempre — ver "Falhas de coleta e fallback seguro" — só nunca
-tinha sido exposto num endpoint.
+tinha sido exposto num endpoint. **Mudado de janela rolante de 30 dias pra
+dia-calendário (2026-07-17)**, a pedido do usuário — é um monitoramento do
+dia corrente ("meu monitoramento"), não um histórico de longo prazo; reseta
+sozinho à meia-noite BRT (`datetime.now(BRAZIL_TZ).replace(hour=0, ...)`
+como início do range, mesmo padrão usado em "Contribuição real vs.
+esperada" pra evitar contar o fim do dia anterior).
 
 **Avaliado e descartado** (2026-07-17): Performance Ratio, geração teórica e
 impacto ambiental (CO₂/carvão/árvores) foram cogitados pra essa aba, mas
@@ -674,7 +679,7 @@ previsão".
 | `GET /api/history/records` | Recordes all-time: melhor dia, melhor mês, maior potência já vista |
 | `GET /api/history/inverters?range=dia\|semana\|mes\|ano` | Geração diária por inversor (Huawei/FoxESS), derivada do `inverter_status` já coletado |
 | `GET /api/history/report.pdf?range=X` | Relatório em PDF enriquecido (recordes do período, contribuição por inversor, anotações, rendimento, deltas vs. período anterior) pra download |
-| `GET /api/collector-health?days=30` | % de ciclos de coleta sem falha por inversor, derivado do `collector_health` já gravado a cada ciclo |
+| `GET /api/collector-health` | % de ciclos de coleta sem falha por inversor **hoje** (dia-calendário BRT), derivado do `collector_health` já gravado a cada ciclo |
 | `POST /api/annotations` | Grava uma anotação (`date`, `note`) — 1 por dia, sobrescreve se já existir |
 | `GET /api/annotations?range=X` | Lista anotações do período, mais recente primeiro |
 | `GET /api/forecast` | Previsão do tempo 5 dias (Open-Meteo, sem API key, mesmo cache de 2h do `/api/day-status`) |
