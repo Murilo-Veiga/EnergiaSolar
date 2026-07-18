@@ -23,8 +23,11 @@ func NewRouter(s *Server) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(s.JWTSecret))
 		r.Get("/api/plants", s.handleListPlants)
+		r.Post("/api/plants", s.handleCreatePlant)
 		r.Route("/api/plants/{plantID}", func(r chi.Router) {
 			r.Get("/", s.handleGetPlant)
+			r.Put("/", s.handleUpdatePlant)
+			r.Delete("/", s.handleDeletePlant)
 			r.Get("/summary", s.handleSummary)
 			r.Get("/inverters", s.handleInverters)
 			r.Get("/collector-health", s.handleCollectorHealth)
@@ -33,6 +36,13 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/history/inverters", s.handleHistoryInverters)
 			r.Get("/annotations", s.handleListAnnotations)
 			r.Post("/annotations", s.handleCreateAnnotation)
+			r.Get("/day-status", s.handleDayStatus)
+			r.Get("/forecast", s.handleForecast)
+			r.Get("/inverters-config", s.handleListInverterCredentials)
+			r.Post("/inverters-config", s.handleCreateInverterCredential)
+			r.Post("/inverters-config/test", s.handleTestInverterCredential)
+			r.Put("/inverters-config/{credID}", s.handleUpdateInverterCredential)
+			r.Delete("/inverters-config/{credID}", s.handleDeleteInverterCredential)
 		})
 	})
 

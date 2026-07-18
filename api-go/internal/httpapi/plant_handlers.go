@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -70,6 +72,80 @@ func (s *Server) handleGetPlant(w http.ResponseWriter, r *http.Request) {
 		ID: p.ID, Name: p.Name, Lat: p.Lat, Lon: p.Lon,
 		InstalledPowerKWp: p.InstalledPowerKWp, Timezone: p.Timezone,
 	})
+}
+
+type plantIn struct {
+	Name              string   `json:"name"`
+	Lat               *float64 `json:"lat"`
+	Lon               *float64 `json:"lon"`
+	InstalledPowerKWp float64  `json:"installed_power_kwp"`
+}
+
+func (in plantIn) valid() bool {
+	return strings.TrimSpace(in.Name) != ""
+}
+
+func (s *Server) handleCreatePlant(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserIDFromContext(r.Context())
+
+	var in plantIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || !in.valid() {
+		writeError(w, http.StatusBadRequest, "name é obrigatório")
+		return
+	}
+
+	var p plantResponse
+	err := s.DB.QueryRow(r.Context(),
+		`INSERT INTO plants (user_id, name, lat, lon, installed_power_kwp)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, name, lat, lon, installed_power_kwp, timezone`,
+		userID, strings.TrimSpace(in.Name), in.Lat, in.Lon, in.InstalledPowerKWp,
+	).Scan(&p.ID, &p.Name, &p.Lat, &p.Lon, &p.InstalledPowerKWp, &p.Timezone)
+	if err != nil {
+		writeInternalError(w, err, "falha ao criar usina")
+		return
+	}
+	writeJSON(w, http.StatusCreated, p)
+}
+
+func (s *Server) handleUpdatePlant(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+
+	var in plantIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || !in.valid() {
+		writeError(w, http.StatusBadRequest, "name é obrigatório")
+		return
+	}
+
+	var p plantResponse
+	err := s.DB.QueryRow(r.Context(),
+		`UPDATE plants SET name = $1, lat = $2, lon = $3, installed_power_kwp = $4
+		 WHERE id = $5
+		 RETURNING id, name, lat, lon, installed_power_kwp, timezone`,
+		strings.TrimSpace(in.Name), in.Lat, in.Lon, in.InstalledPowerKWp, plantID,
+	).Scan(&p.ID, &p.Name, &p.Lat, &p.Lon, &p.InstalledPowerKWp, &p.Timezone)
+	if err != nil {
+		writeInternalError(w, err, "falha ao atualizar usina")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) handleDeletePlant(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+	if _, err := s.DB.Exec(r.Context(), `DELETE FROM plants WHERE id = $1`, plantID); err != nil {
+		writeInternalError(w, err, "falha ao remover usina")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleListPlants(w http.ResponseWriter, r *http.Request) {

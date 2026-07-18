@@ -28,6 +28,11 @@ func main() {
 
 	databaseURL := mustEnv(log, "DATABASE_URL")
 	jwtSecret := []byte(mustEnv(log, "JWT_SECRET"))
+	encryptionKey := []byte(mustEnv(log, "CONFIG_ENCRYPTION_KEY"))
+	if len(encryptionKey) != 32 {
+		log.Error("CONFIG_ENCRYPTION_KEY precisa ter exatamente 32 bytes", "tamanho", len(encryptionKey))
+		os.Exit(1)
+	}
 
 	if err := db.Migrate(databaseURL); err != nil {
 		log.Error("falha ao aplicar migrations", "error", err)
@@ -45,7 +50,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	server := &httpapi.Server{DB: pool, JWTSecret: jwtSecret}
+	server := &httpapi.Server{DB: pool, JWTSecret: jwtSecret, EncryptionKey: encryptionKey}
 	httpServer := &http.Server{
 		Addr:              ":8000",
 		Handler:           httpapi.NewRouter(server),

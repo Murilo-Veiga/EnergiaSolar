@@ -10,6 +10,7 @@ import (
 
 // Server carrega as dependências compartilhadas por todos os handlers.
 type Server struct {
-	DB        *pgxpool.Pool
-	JWTSecret []byte
+	DB            *pgxpool.Pool
+	JWTSecret     []byte
+	EncryptionKey []byte
 }

@@ -70,6 +70,19 @@ func (s *Server) scanOptionalFloat(ctx context.Context, query string, args ...an
 	return &v, nil
 }
 
+// scanOptionalString é o equivalente pra colunas text (ex.: alarm_detail).
+func (s *Server) scanOptionalString(ctx context.Context, query string, args ...any) (*string, error) {
+	var v string
+	err := s.DB.QueryRow(ctx, query, args...).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // scanOptionalBool é o equivalente pra colunas boolean (ex.: has_alarm).
 func (s *Server) scanOptionalBool(ctx context.Context, query string, args ...any) (*bool, error) {
 	var v bool

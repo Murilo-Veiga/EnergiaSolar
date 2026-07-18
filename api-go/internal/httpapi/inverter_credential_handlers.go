@@ -1,0 +1,299 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"energiasolar-api/internal/auth"
+	"energiasolar-api/internal/foxess"
+	"energiasolar-api/internal/huawei"
+)
+
+// inverterCredentialIn cobre os campos de ambas as marcas — só os
+// relevantes pra `brand` são exigidos (ver encodeCredentialSecrets).
+type inverterCredentialIn struct {
+	Brand      string `json:"brand"`
+	Enabled    *bool  `json:"enabled,omitempty"`
+	Username   string `json:"username,omitempty"`
+	SystemCode string `json:"system_code,omitempty"`
+	APIKey     string `json:"api_key,omitempty"`
+	BaseURL    string `json:"base_url,omitempty"`
+}
+
+// encodeCredentialSecrets serializa os campos certos pra cada marca —
+// mesmo formato JSON que collector-go espera decifrar (ver
+// internal/collector/credential.go: huaweiSecrets/foxessSecrets).
+func encodeCredentialSecrets(in inverterCredentialIn) (string, error) {
+	switch in.Brand {
+	case "huawei":
+		if in.Username == "" || in.SystemCode == "" {
+			return "", fmt.Errorf("username e system_code são obrigatórios pra huawei")
+		}
+		b, _ := json.Marshal(map[string]string{
+			"username": in.Username, "system_code": in.SystemCode, "base_url": in.BaseURL,
+		})
+		return string(b), nil
+	case "foxess":
+		if in.APIKey == "" {
+			return "", fmt.Errorf("api_key é obrigatória pra foxess")
+		}
+		b, _ := json.Marshal(map[string]string{"api_key": in.APIKey, "base_url": in.BaseURL})
+		return string(b), nil
+	default:
+		return "", fmt.Errorf("brand precisa ser 'huawei' ou 'foxess'")
+	}
+}
+
+type inverterCredentialResponse struct {
+	ID         string `json:"id"`
+	Brand      string `json:"brand"`
+	Enabled    bool   `json:"enabled"`
+	Configured bool   `json:"configured"`
+}
+
+func (s *Server) handleListInverterCredentials(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+
+	rows, err := s.DB.Query(r.Context(),
+		`SELECT id, brand, enabled FROM inverter_credentials WHERE plant_id = $1 ORDER BY brand`, plantID)
+	if err != nil {
+		writeInternalError(w, err, "falha ao listar credenciais")
+		return
+	}
+	defer rows.Close()
+
+	result := []inverterCredentialResponse{}
+	for rows.Next() {
+		var c inverterCredentialResponse
+		if err := rows.Scan(&c.ID, &c.Brand, &c.Enabled); err != nil {
+			writeInternalError(w, err, "falha ao ler credenciais")
+			return
+		}
+		c.Configured = true
+		result = append(result, c)
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleCreateInverterCredential(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+
+	var in inverterCredentialIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+	secretJSON, err := encodeCredentialSecrets(in)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	encrypted, err := auth.EncryptCredential(secretJSON, s.EncryptionKey)
+	if err != nil {
+		writeInternalError(w, err, "falha ao cifrar credencial")
+		return
+	}
+	enabled := true
+	if in.Enabled != nil {
+		enabled = *in.Enabled
+	}
+
+	var credID string
+	err = s.DB.QueryRow(r.Context(),
+		`INSERT INTO inverter_credentials (plant_id, brand, enabled, credentials_encrypted)
+		 VALUES ($1, $2, $3, $4) RETURNING id`,
+		plantID, in.Brand, enabled, encrypted,
+	).Scan(&credID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == postgresUniqueViolation {
+			writeError(w, http.StatusConflict, "já existe uma credencial dessa marca pra essa usina — use PUT pra atualizar")
+			return
+		}
+		writeInternalError(w, err, "falha ao salvar credencial")
+		return
+	}
+	writeJSON(w, http.StatusCreated, inverterCredentialResponse{ID: credID, Brand: in.Brand, Enabled: enabled, Configured: true})
+}
+
+func (s *Server) handleUpdateInverterCredential(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	credID := chi.URLParam(r, "credID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+
+	var currentBrand string
+	err := s.DB.QueryRow(r.Context(),
+		`SELECT brand FROM inverter_credentials WHERE id = $1 AND plant_id = $2`, credID, plantID,
+	).Scan(&currentBrand)
+	if err != nil {
+		if isNoRows(err) {
+			writeError(w, http.StatusNotFound, "credencial não encontrada")
+			return
+		}
+		writeInternalError(w, err, "falha ao consultar credencial")
+		return
+	}
+
+	var in inverterCredentialIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+	if in.Brand == "" {
+		in.Brand = currentBrand
+	}
+
+	hasNewSecret := in.Username != "" || in.SystemCode != "" || in.APIKey != ""
+	if hasNewSecret {
+		// Usa "=" (não ":=") em cada atribuição de err abaixo — com ":="
+		// aqui, o "err" ficaria restrito a este bloco (shadowing) e o
+		// "if err != nil" depois do if/else nunca veria o resultado real
+		// do Exec, checando sempre o err antigo (nil) da consulta de
+		// currentBrand acima.
+		var secretJSON string
+		secretJSON, err = encodeCredentialSecrets(in)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var encrypted []byte
+		encrypted, err = auth.EncryptCredential(secretJSON, s.EncryptionKey)
+		if err != nil {
+			writeInternalError(w, err, "falha ao cifrar credencial")
+			return
+		}
+		enabled := true
+		if in.Enabled != nil {
+			enabled = *in.Enabled
+		}
+		// Zera a descoberta em cache: uma credencial nova pode apontar
+		// pra uma conta/usina diferente, então station_code/dev_dn/
+		// device_sn antigos não valem mais (collector-go redescobre no
+		// próximo ciclo).
+		_, err = s.DB.Exec(r.Context(),
+			`UPDATE inverter_credentials
+			 SET enabled = $1, credentials_encrypted = $2,
+			     discovered_station_code = NULL, discovered_dev_dn = NULL, discovered_device_sn = NULL
+			 WHERE id = $3 AND plant_id = $4`,
+			enabled, encrypted, credID, plantID)
+	} else if in.Enabled != nil {
+		_, err = s.DB.Exec(r.Context(),
+			`UPDATE inverter_credentials SET enabled = $1 WHERE id = $2 AND plant_id = $3`,
+			*in.Enabled, credID, plantID)
+	}
+	if err != nil {
+		writeInternalError(w, err, "falha ao atualizar credencial")
+		return
+	}
+
+	var enabled bool
+	if err := s.DB.QueryRow(r.Context(), `SELECT enabled FROM inverter_credentials WHERE id = $1`, credID).Scan(&enabled); err != nil {
+		writeInternalError(w, err, "falha ao consultar credencial atualizada")
+		return
+	}
+	writeJSON(w, http.StatusOK, inverterCredentialResponse{ID: credID, Brand: in.Brand, Enabled: enabled, Configured: true})
+}
+
+func (s *Server) handleDeleteInverterCredential(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	credID := chi.URLParam(r, "credID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+	if _, err := s.DB.Exec(r.Context(),
+		`DELETE FROM inverter_credentials WHERE id = $1 AND plant_id = $2`, credID, plantID); err != nil {
+		writeInternalError(w, err, "falha ao remover credencial")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type testConnectionResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// handleTestInverterCredential valida uma credencial ANTES de salvar —
+// recebe o mesmo corpo do POST de criação, mas não grava nada no banco.
+func (s *Server) handleTestInverterCredential(w http.ResponseWriter, r *http.Request) {
+	plantID := chi.URLParam(r, "plantID")
+	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+		respondPlantAuthError(w, err)
+		return
+	}
+
+	var in inverterCredentialIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	switch in.Brand {
+	case "huawei":
+		if in.Username == "" || in.SystemCode == "" {
+			writeError(w, http.StatusBadRequest, "username e system_code são obrigatórios")
+			return
+		}
+		client, err := huawei.NewClient(in.Username, in.SystemCode, in.BaseURL)
+		if err != nil {
+			writeJSON(w, http.StatusOK, testConnectionResult{Message: err.Error()})
+			return
+		}
+		if err := client.Login(ctx); err != nil {
+			writeJSON(w, http.StatusOK, testConnectionResult{Message: err.Error()})
+			return
+		}
+		stations, err := client.GetStationList(ctx)
+		if err != nil {
+			writeJSON(w, http.StatusOK, testConnectionResult{Message: err.Error()})
+			return
+		}
+		if len(stations) == 0 {
+			writeJSON(w, http.StatusOK, testConnectionResult{Message: "login funcionou, mas nenhuma usina foi encontrada nessa conta"})
+			return
+		}
+		writeJSON(w, http.StatusOK, testConnectionResult{Success: true, Message: fmt.Sprintf("conectado — %d usina(s) encontrada(s)", len(stations))})
+
+	case "foxess":
+		if in.APIKey == "" {
+			writeError(w, http.StatusBadRequest, "api_key é obrigatória")
+			return
+		}
+		client := foxess.NewClient(in.APIKey, in.BaseURL)
+		devices, err := client.GetDeviceList(ctx)
+		if err != nil {
+			writeJSON(w, http.StatusOK, testConnectionResult{Message: err.Error()})
+			return
+		}
+		if len(devices) == 0 {
+			writeJSON(w, http.StatusOK, testConnectionResult{Message: "conectou, mas nenhum inversor foi encontrado nessa conta"})
+			return
+		}
+		writeJSON(w, http.StatusOK, testConnectionResult{Success: true, Message: fmt.Sprintf("conectado — %d inversor(es) encontrado(s)", len(devices))})
+
+	default:
+		writeError(w, http.StatusBadRequest, "brand precisa ser 'huawei' ou 'foxess'")
+	}
+}
