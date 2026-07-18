@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"energiasolar-api/internal/brtime"
 )
 
 type historyRow struct {
@@ -188,7 +190,7 @@ func (s *Server) handleHistoryInverters(w http.ResponseWriter, r *http.Request) 
 
 	var sinceUTC time.Time
 	if rangeParam == "dia" {
-		sinceUTC = startOfDayBrazil()
+		sinceUTC = brtime.StartOfDay()
 	} else {
 		days := daysForRange(rangeParam)
 		sinceUTC = time.Now().UTC().AddDate(0, 0, -days)

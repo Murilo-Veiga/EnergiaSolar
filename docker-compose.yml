@@ -100,6 +100,17 @@ services:
       - postgres
       - influxdb
 
+  collector-go:
+    build: ./api-go
+    container_name: solar-home-collector-go
+    restart: unless-stopped
+    entrypoint: collector
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-solarhome}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-solarhome}?sslmode=disable
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
+    depends_on:
+      - postgres
+
 volumes:
   influxdb-data:
   postgres-data:

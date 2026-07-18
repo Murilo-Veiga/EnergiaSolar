@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"energiasolar-api/internal/brtime"
 )
 
 type summaryResponse struct {
@@ -123,7 +125,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		`SELECT instantaneous_power_kw, recorded_at FROM plant_status
 		 WHERE plant_id = $1 AND recorded_at >= $2
 		 ORDER BY instantaneous_power_kw DESC LIMIT 1`,
-		plantID, startOfDayBrazil())
+		plantID, brtime.StartOfDay())
 	var peakVal float64
 	var peakAt time.Time
 	if err := row.Scan(&peakVal, &peakAt); err == nil {
