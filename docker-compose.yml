@@ -96,6 +96,7 @@ services:
       INFLUXDB_ORG: ${INFLUXDB_ORG}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
       TARGET_PLANT_ID: ${TARGET_PLANT_ID}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:3000}
     depends_on:
       - postgres
       - influxdb
@@ -110,6 +111,18 @@ services:
       CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
     depends_on:
       - postgres
+
+  web-react:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8090}
+    container_name: solar-home-web-react
+    restart: unless-stopped
+    ports:
+      - "3000:8000"
+    depends_on:
+      - api-go
 
 volumes:
   influxdb-data:

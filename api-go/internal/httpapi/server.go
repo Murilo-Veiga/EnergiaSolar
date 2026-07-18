@@ -13,4 +13,8 @@ type Server struct {
 	DB            *pgxpool.Pool
 	JWTSecret     []byte
 	EncryptionKey []byte
+	// AllowedOrigin é a origem do frontend React (dev: localhost:5173,
+	// produção: o serviço web-react) — precisa ser explícita (não "*")
+	// porque a sessão usa cookie com credentials:"include".
+	AllowedOrigin string
 }

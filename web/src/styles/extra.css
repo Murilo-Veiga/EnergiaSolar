@@ -1,0 +1,227 @@
+/* Estilos novos (auth, administração) — não existiam no dashboard
+   original, seguem os mesmos tokens de styles/global.css. */
+
+/* index.html do Vite tem uma <div id="root"> que o HTML original não
+   tinha (renderizava direto no <body>) — sem isso, .sidebar/.app não
+   esticam até o fim da tela (ver html,body{height:100%} em global.css). */
+#root {
+  height: 100%;
+}
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--ink-muted);
+  font-family: var(--font-ui);
+}
+
+.auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--page);
+}
+
+.auth-card {
+  width: 340px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-card h1 {
+  font-size: 18px;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.auth-card input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-family: var(--font-ui);
+}
+
+.auth-card button[type="submit"] {
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.auth-card button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth-link {
+  background: none;
+  border: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-align: center;
+}
+
+.auth-error {
+  color: var(--critical);
+  font-size: 12.5px;
+}
+
+/* Administração */
+
+.admin-section {
+  margin-bottom: 20px;
+}
+
+.admin-section h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.admin-form {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.admin-form input,
+.admin-form select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 9px;
+  color: var(--ink);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.admin-form-full {
+  grid-column: 1 / -1;
+}
+
+.btn {
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-secondary {
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+
+.btn-danger {
+  background: var(--critical);
+  color: #fff;
+}
+
+.plant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.plant-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.plant-list-item.active {
+  border-color: var(--accent-blue);
+  background: var(--surface-2);
+}
+
+.credential-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.credential-row .badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  color: var(--ink-muted);
+}
+
+.credential-row .badge.on {
+  background: rgba(12, 163, 12, 0.15);
+  color: var(--good);
+}
+
+.test-result {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.test-result.ok {
+  color: var(--good);
+}
+
+.test-result.fail {
+  color: var(--critical);
+}
+
+.placeholder-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--ink-muted);
+  text-align: center;
+  gap: 10px;
+}
