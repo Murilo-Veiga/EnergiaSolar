@@ -25,6 +25,7 @@ function App() {
   const [authView, setAuthView] = useState<"login" | "signup">("login");
   const [tab, setTab] = useState<TabName>("dashboard");
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   if (loading) {
     return <div className="app-loading">Carregando...</div>;
@@ -50,6 +51,11 @@ function App() {
       <main className="main">
         <div className="topbar">
           <h2>{TITLES[effectiveTab]}</h2>
+          {effectiveTab === "dashboard" && updatedAt && (
+            <div className="updated">
+              <span className="sw" /> Atualizado às {new Date(updatedAt).toLocaleTimeString("pt-BR")}
+            </div>
+          )}
         </div>
 
         {effectiveTab === "administracao" && (
@@ -58,7 +64,7 @@ function App() {
 
         {activePlant && effectiveTab !== "administracao" && (
           <PlantProvider plant={activePlant}>
-            {effectiveTab === "dashboard" && <DashboardTab />}
+            {effectiveTab === "dashboard" && <DashboardTab onUpdatedAt={setUpdatedAt} />}
             {effectiveTab === "historico" && <HistoricoTab />}
             {effectiveTab === "saude" && <SaudeTab />}
             {effectiveTab === "consumo" && <ConsumoTab />}
