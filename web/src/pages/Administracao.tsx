@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, type AdminUser, type InverterCredential, type Me, type Plant } from "../lib/api";
+import { api, ApiError, type AdminUser, type InverterCredential, type Plant } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 interface Props {
@@ -8,34 +8,56 @@ interface Props {
   onSelectPlant: (id: string | null) => void;
 }
 
-type AdminTab = "sistema" | "usuarios";
+type AdminTab = "sistema" | "usinas" | "usuarios";
 
 export function Administracao({ plants, activePlantId, onSelectPlant }: Props) {
-  const [tab, setTab] = useState<AdminTab>("sistema");
+  const { isAdmin } = useAuth();
+  const [tab, setTab] = useState<AdminTab>("usinas");
+
+  const tabs: { key: AdminTab; label: string }[] = isAdmin
+    ? [
+        { key: "sistema", label: "Configuração do sistema" },
+        { key: "usinas", label: "Minhas usinas" },
+        { key: "usuarios", label: "Gestão de usuários" },
+      ]
+    : [{ key: "usinas", label: "Minhas usinas" }];
 
   return (
     <div>
-      <div className="chart-head" style={{ marginBottom: 16 }}>
-        <div className="range-toggle">
-          <span className={tab === "sistema" ? "active" : ""} onClick={() => setTab("sistema")}>
-            Configuração do sistema
-          </span>
-          <span className={tab === "usuarios" ? "active" : ""} onClick={() => setTab("usuarios")}>
-            Configuração de usuários
-          </span>
+      {tabs.length > 1 && (
+        <div className="chart-head" style={{ marginBottom: 16 }}>
+          <div className="range-toggle">
+            {tabs.map((t) => (
+              <span key={t.key} className={tab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
+                {t.label}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-
-      {tab === "sistema" ? (
-        <SistemaTab plants={plants} activePlantId={activePlantId} onSelectPlant={onSelectPlant} />
-      ) : (
-        <UsuariosTab />
       )}
+
+      {tab === "sistema" && isAdmin && <SistemaGlobalTab />}
+      {tab === "usinas" && <UsinasTab plants={plants} activePlantId={activePlantId} onSelectPlant={onSelectPlant} />}
+      {tab === "usuarios" && isAdmin && <GestaoUsuariosTab />}
     </div>
   );
 }
 
-function SistemaTab({ plants, activePlantId, onSelectPlant }: Props) {
+// Configurações que não dependem de usuário nem de usina — hoje o sistema
+// ainda não tem nenhuma (tudo é por usina: credenciais de inversor, etc.).
+// Reservado pra parâmetros globais futuros.
+function SistemaGlobalTab() {
+  return (
+    <div className="admin-section">
+      <h3>Configuração do sistema</h3>
+      <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>
+        Nenhuma configuração global disponível no momento.
+      </div>
+    </div>
+  );
+}
+
+function UsinasTab({ plants, activePlantId, onSelectPlant }: Props) {
   const { refreshPlants } = useAuth();
   const activePlant = plants.find((p) => p.id === activePlantId) ?? null;
 
@@ -75,42 +97,17 @@ function SistemaTab({ plants, activePlantId, onSelectPlant }: Props) {
   );
 }
 
-function UsuariosTab() {
-  const { isAdmin } = useAuth();
-  const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
+function GestaoUsuariosTab() {
+  const { userId } = useAuth();
 
-  async function load() {
-    setLoading(true);
-    const data = await api.get<Me>("/api/me");
-    setMe(data);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  if (loading || !me) {
+  if (!userId) {
     return <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Carregando...</div>;
   }
 
   return (
-    <div>
-      <div className="admin-section">
-        <h3>Conta</h3>
-        <EmailForm email={me.email} onSaved={load} />
-      </div>
-      <div className="admin-section">
-        <h3>Senha</h3>
-        <PasswordForm />
-      </div>
-      {isAdmin && (
-        <div className="admin-section">
-          <h3>Gerência de usuários</h3>
-          <UserManagement currentUserId={me.user_id} />
-        </div>
-      )}
+    <div className="admin-section">
+      <h3>Gestão de usuários</h3>
+      <UserManagement currentUserId={userId} />
     </div>
   );
 }
@@ -327,98 +324,6 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <button className="btn btn-secondary" type="button" onClick={() => setOpen(false)}>
           Cancelar
         </button>
-        {error && <span className="auth-error">{error}</span>}
-      </div>
-    </form>
-  );
-}
-
-function EmailForm({ email, onSaved }: { email: string; onSaved: () => Promise<void> }) {
-  const [value, setValue] = useState(email);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  useEffect(() => setValue(email), [email]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    setSuccess(false);
-    try {
-      await api.put("/api/me", { email: value });
-      setSuccess(true);
-      await onSaved();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao salvar e-mail");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="admin-form">
-      <label>
-        E-mail
-        <input type="email" value={value} onChange={(e) => setValue(e.target.value)} required />
-      </label>
-      <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button className="btn" type="submit" disabled={submitting}>
-          Salvar
-        </button>
-        {success && <span style={{ color: "var(--good)", fontSize: 13 }}>E-mail atualizado.</span>}
-        {error && <span className="auth-error">{error}</span>}
-      </div>
-    </form>
-  );
-}
-
-function PasswordForm() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    setSuccess(false);
-    try {
-      await api.put("/api/me/password", { current_password: currentPassword, new_password: newPassword });
-      setCurrentPassword("");
-      setNewPassword("");
-      setSuccess(true);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao trocar senha");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="admin-form">
-      <label>
-        Senha atual
-        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-      </label>
-      <label>
-        Nova senha
-        <input
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          minLength={8}
-          required
-        />
-      </label>
-      <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button className="btn" type="submit" disabled={submitting}>
-          Trocar senha
-        </button>
-        {success && <span style={{ color: "var(--good)", fontSize: 13 }}>Senha atualizada.</span>}
         {error && <span className="auth-error">{error}</span>}
       </div>
     </form>

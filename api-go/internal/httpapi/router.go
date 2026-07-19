@@ -30,7 +30,7 @@ func NewRouter(s *Server) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(s.JWTSecret))
 		r.Get("/api/me", s.handleGetMe)
-		r.Put("/api/me", s.handleUpdateEmail)
+		r.Put("/api/me", s.handleUpdateProfile)
 		r.Put("/api/me/password", s.handleUpdatePassword)
 		r.Route("/api/admin/users", func(r chi.Router) {
 			r.Use(s.RequireAdmin)

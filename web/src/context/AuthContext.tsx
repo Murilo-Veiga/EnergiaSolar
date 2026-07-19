@@ -5,6 +5,7 @@ interface AuthContextValue {
   authenticated: boolean;
   loading: boolean;
   isAdmin: boolean;
+  userId: string | null;
   plants: Plant[];
   refreshPlants: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -21,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
 
   const refreshPlants = useCallback(async () => {
@@ -31,14 +33,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const me = await api.get<Me>("/api/me");
         setIsAdmin(me.is_admin);
+        setUserId(me.user_id);
       } catch {
         setIsAdmin(false);
+        setUserId(null);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setAuthenticated(false);
         setPlants([]);
         setIsAdmin(false);
+        setUserId(null);
       } else {
         throw err;
       }
@@ -72,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ authenticated, loading, isAdmin, plants, refreshPlants, login, signup, logout }}>
+    <AuthContext.Provider value={{ authenticated, loading, isAdmin, userId, plants, refreshPlants, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

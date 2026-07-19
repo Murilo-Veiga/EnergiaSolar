@@ -48,6 +48,7 @@ export const api = {
 export interface Me {
   user_id: string;
   email: string;
+  name: string;
   is_admin: boolean;
 }
 

@@ -26,6 +26,7 @@ type signupRequest struct {
 type authResponse struct {
 	UserID  string `json:"user_id"`
 	Email   string `json:"email"`
+	Name    string `json:"name"`
 	IsAdmin bool   `json:"is_admin"`
 }
 
@@ -91,7 +92,6 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, authResponse{UserID: userID, Email: req.Email})
 }
 
-
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req signupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -99,11 +99,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID, passwordHash string
+	var userID, passwordHash, name string
 	var isAdmin bool
 	err := s.DB.QueryRow(r.Context(),
-		`SELECT id, password_hash, is_admin FROM users WHERE email = $1`, req.Email,
-	).Scan(&userID, &passwordHash, &isAdmin)
+		`SELECT id, password_hash, name, is_admin FROM users WHERE email = $1`, req.Email,
+	).Scan(&userID, &passwordHash, &name, &isAdmin)
 	// Erro de banco de verdade (conexão etc.) precisa de 500 — checar antes
 	// do caminho de credencial inválida, senão uma falha de infra vira
 	// silenciosamente "senha errada" (CheckPassword só recebe um hash vazio).
@@ -121,7 +121,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "falha ao criar sessão")
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: req.Email, IsAdmin: isAdmin})
+	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: req.Email, Name: name, IsAdmin: isAdmin})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

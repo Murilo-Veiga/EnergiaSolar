@@ -11,8 +11,9 @@ import (
 	"energiasolar-api/internal/auth"
 )
 
-type updateEmailRequest struct {
+type updateProfileRequest struct {
 	Email string `json:"email"`
+	Name  string `json:"name"`
 }
 
 type updatePasswordRequest struct {
@@ -24,9 +25,9 @@ type updatePasswordRequest struct {
 func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserIDFromContext(r.Context())
 
-	var email string
+	var email, name string
 	var isAdmin bool
-	err := s.DB.QueryRow(r.Context(), `SELECT email, is_admin FROM users WHERE id = $1`, userID).Scan(&email, &isAdmin)
+	err := s.DB.QueryRow(r.Context(), `SELECT email, name, is_admin FROM users WHERE id = $1`, userID).Scan(&email, &name, &isAdmin)
 	if isNoRows(err) {
 		writeError(w, http.StatusNotFound, "usuário não encontrado")
 		return
@@ -35,30 +36,30 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err, "falha ao consultar usuário")
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: email, IsAdmin: isAdmin})
+	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: email, Name: name, IsAdmin: isAdmin})
 }
 
-// handleUpdateEmail troca o e-mail da conta logada.
-func (s *Server) handleUpdateEmail(w http.ResponseWriter, r *http.Request) {
+// handleUpdateProfile troca o e-mail e o nome da conta logada.
+func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserIDFromContext(r.Context())
 
-	var req updateEmailRequest
+	var req updateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
 		writeError(w, http.StatusBadRequest, "e-mail válido é obrigatório")
 		return
 	}
 
-	_, err := s.DB.Exec(r.Context(), `UPDATE users SET email = $1 WHERE id = $2`, req.Email, userID)
+	_, err := s.DB.Exec(r.Context(), `UPDATE users SET email = $1, name = $2 WHERE id = $3`, req.Email, req.Name, userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == postgresUniqueViolation {
 			writeError(w, http.StatusConflict, "e-mail já cadastrado")
 			return
 		}
-		writeInternalError(w, err, "falha ao atualizar e-mail")
+		writeInternalError(w, err, "falha ao atualizar perfil")
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: req.Email})
+	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: req.Email, Name: req.Name})
 }
 
 // handleUpdatePassword troca a senha da conta logada — exige a senha atual.

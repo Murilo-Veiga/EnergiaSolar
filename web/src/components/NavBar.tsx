@@ -11,7 +11,15 @@ const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "g
   { tab: "administracao", label: "Administração", icon: "settings", color: "blue" },
 ];
 
-export function NavBar({ active, onSelect }: { active: TabName; onSelect: (tab: TabName) => void }) {
+export function NavBar({
+  active,
+  onSelect,
+  onMyAccount,
+}: {
+  active: TabName;
+  onSelect: (tab: TabName) => void;
+  onMyAccount: () => void;
+}) {
   const { logout } = useAuth();
 
   return (
@@ -37,9 +45,14 @@ export function NavBar({ active, onSelect }: { active: TabName; onSelect: (tab: 
           </a>
         ))}
       </nav>
-      <div style={{ marginTop: "auto", paddingTop: 16 }}>
+      <div className="nav" style={{ marginTop: "auto", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        <a className={active === "minha-conta" ? "active" : ""} onClick={onMyAccount} style={{ cursor: "pointer" }}>
+          <IconBadge name="user" color="blue" size="nav" />
+          {" Minha conta"}
+        </a>
         <a onClick={() => void logout()} style={{ cursor: "pointer" }}>
-          Sair
+          <IconBadge name="logout" color="red" size="nav" />
+          {" Sair"}
         </a>
       </div>
     </aside>
