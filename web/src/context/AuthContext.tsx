@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, ApiError, type Plant } from "../lib/api";
+import { api, ApiError, type Me, type Plant } from "../lib/api";
 
 interface AuthContextValue {
   authenticated: boolean;
   loading: boolean;
+  isAdmin: boolean;
   plants: Plant[];
   refreshPlants: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -13,11 +14,13 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Não existe endpoint "whoami" — descobrimos se a sessão (cookie httpOnly)
-// ainda é válida chamando /api/plants: 200 = autenticado, 401 = não.
+// Não existe endpoint "whoami" dedicado pra plants — descobrimos se a sessão
+// (cookie httpOnly) ainda é válida chamando /api/plants: 200 = autenticado,
+// 401 = não. is_admin vem de /api/me, chamado em paralelo.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [plants, setPlants] = useState<Plant[]>([]);
 
   const refreshPlants = useCallback(async () => {
@@ -25,10 +28,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const list = await api.get<Plant[]>("/api/plants");
       setPlants(list);
       setAuthenticated(true);
+      try {
+        const me = await api.get<Me>("/api/me");
+        setIsAdmin(me.is_admin);
+      } catch {
+        setIsAdmin(false);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setAuthenticated(false);
         setPlants([]);
+        setIsAdmin(false);
       } else {
         throw err;
       }
@@ -62,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ authenticated, loading, plants, refreshPlants, login, signup, logout }}>
+    <AuthContext.Provider value={{ authenticated, loading, isAdmin, plants, refreshPlants, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -29,6 +29,18 @@ func NewRouter(s *Server) http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(s.JWTSecret))
+		r.Get("/api/me", s.handleGetMe)
+		r.Put("/api/me", s.handleUpdateEmail)
+		r.Put("/api/me/password", s.handleUpdatePassword)
+		r.Route("/api/admin/users", func(r chi.Router) {
+			r.Use(s.RequireAdmin)
+			r.Get("/", s.handleAdminListUsers)
+			r.Post("/", s.handleAdminCreateUser)
+			r.Get("/{userID}", s.handleAdminGetUser)
+			r.Put("/{userID}", s.handleAdminUpdateUser)
+			r.Put("/{userID}/password", s.handleAdminResetPassword)
+			r.Delete("/{userID}", s.handleAdminDeleteUser)
+		})
 		r.Get("/api/plants", s.handleListPlants)
 		r.Post("/api/plants", s.handleCreatePlant)
 		r.Route("/api/plants/{plantID}", func(r chi.Router) {
