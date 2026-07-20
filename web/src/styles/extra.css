@@ -155,6 +155,15 @@
   grid-column: 1 / -1;
 }
 
+@media (max-width: 860px) {
+  /* Mesmo breakpoint da sidebar (ver global.css) — abaixo dele o grid de
+     2 colunas fica estreito demais (URLs e outros valores compridos
+     truncam dentro do input em vez de mostrar o conteúdo). */
+  .admin-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 .btn {
   background: var(--accent-blue);
   color: #fff;
@@ -192,10 +201,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 8px;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
   cursor: pointer;
+}
+
+/* Grupo de ações à direita (badge + botões) — mesma lógica: deixa o
+   navegador decidir quando quebrar linha em vez de fixar um breakpoint,
+   evita o badge "admin" colidindo com o texto de contagem de instalações
+   em telas estreitas (Gestão de usuários). */
+.plant-list-item > div {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .plant-list-item.active {

@@ -223,9 +223,9 @@ function CredentialsManager({ plantId }: { plantId: string }) {
               key={cred.id}
               style={{ flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", gap: 6 }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", rowGap: 8 }}>
                 <span style={{ textTransform: "capitalize" }}>{cred.brand}</span>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", rowGap: 6 }}>
                   <span className={`badge ${cred.enabled ? "on" : ""}`}>{cred.enabled ? "Habilitado" : "Desabilitado"}</span>
                   <button className="btn btn-secondary" onClick={() => setEditingId(cred.id)}>
                     Editar

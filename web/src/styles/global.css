@@ -116,6 +116,13 @@
 
   /* Hero row */
   .hero-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 860px) {
+    /* 3 colunas de largura fixa (1.3fr/1fr/1fr) espremem demais em tela de
+       celular — "Potência instalada" (a coluna mais estreita) acaba com
+       menos espaço que o número de 3 dígitos + unidade precisam. Empilha
+       em 1 coluna cheia em vez de espremer. */
+    .hero-row { grid-template-columns: 1fr; }
+  }
   .hero-card { padding: 20px 22px; }
   .hero-card .l { font-size: 12px; color: var(--ink-muted); font-weight: 500; }
   .hero-card .v-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
@@ -137,6 +144,9 @@
 
   /* Inverter row */
   .inv-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 860px) {
+    .inv-row { grid-template-columns: 1fr; }
+  }
   .inv-card { padding: 14px 18px 16px; }
   .inv-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .inv-id { display: flex; align-items: center; gap: 10px; }
@@ -262,6 +272,12 @@
   .day-grid .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 4px; }
   .day-grid .v { font-size: 15px; font-weight: 600; font-family: var(--font-data); }
   .day-grid .aux { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 3px; font-family: var(--font-data); }
+  @media (max-width: 860px) {
+    /* Mesmo problema do .hero-row/.inv-row: colunas de largura fixa
+       espremem em tela de celular (usado em Recordes do Histórico e
+       Confiabilidade da coleta em Saúde da instalação). */
+    .day-grid { grid-template-columns: 1fr; }
+  }
   .hero-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .hero-line .aux { font-size: 12.5px; color: var(--ink-muted); }
   .sparkline-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -283,6 +299,14 @@
      diferença de fonte visível em vez de escondida. */
   .day-timeline { display: flex; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
   .tl-day { flex: 1; text-align: center; background: var(--surface-2); border-radius: 8px; padding: 12px 8px 10px; display: flex; flex-direction: column; border: 1px solid transparent; position: relative; }
+
+  @media (max-width: 860px) {
+    /* 5 cartões com flex:1 espremem demais numa tela de celular — vira
+       carrossel horizontal (scroll + snap) em vez de cortar o último
+       cartão fora da tela. */
+    .day-timeline { overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+    .tl-day { flex: 0 0 104px; scroll-snap-align: start; }
+  }
   .tl-day.today { background: var(--surface-3); border-color: var(--accent-blue); }
   .tl-day.today::before {
     content: "HOJE"; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
