@@ -16,9 +16,9 @@ export type TabName = "dashboard" | "historico" | "saude" | "consumo" | "minhas-
 const TITLES: Record<TabName, string> = {
   dashboard: "Dashboard",
   historico: "Histórico",
-  saude: "Saúde da usina",
+  saude: "Saúde da instalação",
   consumo: "Consumo",
-  "minhas-usinas": "Minhas usinas",
+  "minhas-usinas": "Minhas instalações",
   administracao: "Administração",
   "minha-conta": "Minha conta",
 };
@@ -39,9 +39,10 @@ function App() {
 
   const activePlant = plants.find((p) => p.id === selectedPlantId) ?? plants[0] ?? null;
 
-  // Sem nenhuma usina cadastrada ainda: força a aba Minhas usinas — não dá
-  // pra abrir Dashboard/Histórico/Saúde sem usina nenhuma selecionada.
-  // "Minha conta" não depende de usina, então fica de fora dessa trava.
+  // Sem nenhuma instalação cadastrada ainda: força a aba Minhas
+  // instalações — não dá pra abrir Dashboard/Histórico/Saúde sem
+  // instalação nenhuma selecionada. "Minha conta" não depende de
+  // instalação, então fica de fora dessa trava.
   const effectiveTab: TabName = !activePlant && tab !== "minha-conta" ? "minhas-usinas" : tab;
 
   return (

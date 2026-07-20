@@ -8,7 +8,7 @@ const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "g
   { tab: "historico", label: "Histórico", icon: "trendingUp", color: "blue" },
   { tab: "saude", label: "Saúde", icon: "activity", color: "green" },
   { tab: "consumo", label: "Consumo", icon: "wallet", color: "aqua" },
-  { tab: "minhas-usinas", label: "Minhas usinas", icon: "sun", color: "green" },
+  { tab: "minhas-usinas", label: "Minhas instalações", icon: "sun", color: "green" },
   { tab: "administracao", label: "Administração", icon: "settings", color: "blue", adminOnly: true },
 ];
 

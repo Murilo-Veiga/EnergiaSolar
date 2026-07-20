@@ -30,7 +30,7 @@ export function Administracao() {
   );
 }
 
-// Configurações que não dependem de usuário nem de usina: URL padrão das
+// Configurações que não dependem de usuário nem de instalação: URL padrão das
 // integrações Huawei/FoxESS (usada quando uma credencial não define a
 // própria) e o intervalo do worker de coleta — ver
 // api-go/internal/collector/supervisor.go, que relê essa config a cada
@@ -140,7 +140,7 @@ function SystemSettingsForm({ settings, onSaved }: { settings: SystemSettings; o
         {error && <span className="auth-error">{error}</span>}
       </div>
       <div className="admin-form-full" style={{ color: "var(--ink-muted)", fontSize: 12 }}>
-        URLs vazias usam o padrão do sistema. Credenciais de usina com URL própria continuam usando a URL delas,
+        URLs vazias usam o padrão do sistema. Credenciais de instalação com URL própria continuam usando a URL delas,
         não a global. O worker pode levar até alguns minutos pra aplicar uma mudança.
       </div>
     </form>
@@ -185,7 +185,7 @@ function UserManagement({ currentUserId }: { currentUserId: string }) {
   }, []);
 
   async function remove(user: AdminUser) {
-    if (!confirm(`Apagar o usuário "${user.email}"? Isso também remove suas usinas e credenciais.`)) return;
+    if (!confirm(`Apagar o usuário "${user.email}"? Isso também remove suas instalações e credenciais.`)) return;
     try {
       await api.delete(`/api/admin/users/${user.id}`);
       await load();
@@ -228,7 +228,7 @@ function UserManagement({ currentUserId }: { currentUserId: string }) {
                 </span>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>
-                    {u.plants_count} usina{u.plants_count === 1 ? "" : "s"}
+                    {u.plants_count} instalaç{u.plants_count === 1 ? "ão" : "ões"}
                   </span>
                   <button className="btn btn-secondary" onClick={() => setEditingId(u.id)}>
                     Editar

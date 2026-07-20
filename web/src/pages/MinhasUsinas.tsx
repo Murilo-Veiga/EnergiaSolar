@@ -15,7 +15,7 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
   return (
     <div>
       <div className="admin-section">
-        <h3>Suas usinas</h3>
+        <h3>Suas instalações</h3>
         <div className="plant-list">
           {plants.map((p) => (
             <div
@@ -27,7 +27,7 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
               <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>{p.installed_power_kwp} kWp</span>
             </div>
           ))}
-          {plants.length === 0 && <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nenhuma usina cadastrada ainda.</div>}
+          {plants.length === 0 && <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nenhuma instalação cadastrada ainda.</div>}
         </div>
         <NewPlantForm onCreated={refreshPlants} />
       </div>
@@ -35,11 +35,11 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
       {activePlant && (
         <>
           <div className="admin-section">
-            <h3>Dados da usina</h3>
+            <h3>Dados da instalação</h3>
             <PlantForm plant={activePlant} onSaved={refreshPlants} onDeleted={() => { onSelectPlant(null); void refreshPlants(); }} />
           </div>
           <div className="admin-section">
-            <h3>Inversores da usina</h3>
+            <h3>Inversores da instalação</h3>
             <CredentialsManager plantId={activePlant.id} />
           </div>
         </>
@@ -64,7 +64,7 @@ function NewPlantForm({ onCreated }: { onCreated: () => Promise<void> }) {
       setOpen(false);
       await onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao criar usina");
+      setError(err instanceof ApiError ? err.message : "Falha ao criar instalação");
     } finally {
       setSubmitting(false);
     }
@@ -73,7 +73,7 @@ function NewPlantForm({ onCreated }: { onCreated: () => Promise<void> }) {
   if (!open) {
     return (
       <button className="btn btn-secondary" onClick={() => setOpen(true)}>
-        + Nova usina
+        + Nova instalação
       </button>
     );
   }
@@ -81,7 +81,7 @@ function NewPlantForm({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
       <input
-        placeholder="Nome da usina"
+        placeholder="Nome da instalação"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
@@ -133,7 +133,7 @@ function PlantForm({ plant, onSaved, onDeleted }: { plant: Plant; onSaved: () =>
   }
 
   async function handleDelete() {
-    if (!confirm(`Remover a usina "${plant.name}"? Isso apaga também as credenciais associadas.`)) return;
+    if (!confirm(`Remover a instalação "${plant.name}"? Isso apaga também as credenciais associadas.`)) return;
     await api.delete(`/api/plants/${plant.id}`);
     onDeleted();
   }
@@ -161,7 +161,7 @@ function PlantForm({ plant, onSaved, onDeleted }: { plant: Plant; onSaved: () =>
           Salvar
         </button>
         <button className="btn btn-danger" type="button" onClick={handleDelete}>
-          Remover usina
+          Remover instalação
         </button>
         {error && <span className="auth-error">{error}</span>}
       </div>
