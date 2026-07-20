@@ -77,11 +77,22 @@ export interface Plant {
   timezone: string;
 }
 
+export interface InverterDeviceInfo {
+  station_code?: string;
+  dev_dn?: string;
+  device_sn?: string;
+  power_kw?: number;
+  day_kwh?: number;
+  temperature_c?: number;
+  error?: string;
+}
+
 export interface InverterCredential {
   id: string;
   brand: "huawei" | "foxess";
   enabled: boolean;
   configured: boolean;
+  device_info?: InverterDeviceInfo;
 }
 
 export interface Summary {

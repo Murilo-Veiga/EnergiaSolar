@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, type InverterCredential, type Plant } from "../lib/api";
+import { api, ApiError, type InverterCredential, type InverterDeviceInfo, type Plant } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 interface Props {
@@ -218,20 +218,27 @@ function CredentialsManager({ plantId }: { plantId: string }) {
               onCancel={() => setEditingId(null)}
             />
           ) : (
-            <div className="credential-row" key={cred.id}>
-              <span style={{ textTransform: "capitalize" }}>{cred.brand}</span>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <span className={`badge ${cred.enabled ? "on" : ""}`}>{cred.enabled ? "Habilitado" : "Desabilitado"}</span>
-                <button className="btn btn-secondary" onClick={() => setEditingId(cred.id)}>
-                  Editar
-                </button>
-                <button className="btn btn-secondary" onClick={() => toggleEnabled(cred)}>
-                  {cred.enabled ? "Desabilitar" : "Habilitar"}
-                </button>
-                <button className="btn btn-danger" onClick={() => remove(cred)}>
-                  Remover
-                </button>
+            <div
+              className="credential-row"
+              key={cred.id}
+              style={{ flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", gap: 6 }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ textTransform: "capitalize" }}>{cred.brand}</span>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span className={`badge ${cred.enabled ? "on" : ""}`}>{cred.enabled ? "Habilitado" : "Desabilitado"}</span>
+                  <button className="btn btn-secondary" onClick={() => setEditingId(cred.id)}>
+                    Editar
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => toggleEnabled(cred)}>
+                    {cred.enabled ? "Desabilitar" : "Habilitar"}
+                  </button>
+                  <button className="btn btn-danger" onClick={() => remove(cred)}>
+                    Remover
+                  </button>
+                </div>
               </div>
+              <DeviceInfoSummary info={cred.device_info} />
             </div>
           ),
         )
@@ -239,6 +246,30 @@ function CredentialsManager({ plantId }: { plantId: string }) {
 
       {!existingBrands.has("huawei") && <CredentialForm plantId={plantId} brand="huawei" onSaved={load} />}
       {!existingBrands.has("foxess") && <CredentialForm plantId={plantId} brand="foxess" onSaved={load} />}
+    </div>
+  );
+}
+
+// DeviceInfoSummary mostra o retrato mais recente do inversor (identificador
+// + potência/geração/temperatura), atualizado na hora do cadastro/edição da
+// credencial (ver discoverAndPersistSnapshot no backend) — ou o erro da
+// última tentativa de busca, se não deu pra confirmar o inversor ainda.
+function DeviceInfoSummary({ info }: { info?: InverterDeviceInfo }) {
+  if (!info) {
+    return <div style={{ color: "var(--ink-muted)", fontSize: 12 }}>Ainda sem dados do inversor — aguardando 1º ciclo de coleta.</div>;
+  }
+  if (info.error && info.power_kw === undefined) {
+    return <div className="auth-error" style={{ fontSize: 12 }}>Não foi possível buscar os dados do inversor agora: {info.error}</div>;
+  }
+
+  const id = info.device_sn ?? info.dev_dn ?? info.station_code;
+  return (
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: "var(--ink-muted)" }}>
+      {id && <span>Inversor: {id}</span>}
+      {info.power_kw !== undefined && <span>{info.power_kw.toFixed(2)} kW agora</span>}
+      {info.day_kwh !== undefined && <span>{info.day_kwh.toFixed(2)} kWh hoje</span>}
+      {info.temperature_c !== undefined && <span>{info.temperature_c.toFixed(1)} °C</span>}
+      {info.error && <span style={{ color: "var(--critical)" }}>Última busca falhou: {info.error}</span>}
     </div>
   );
 }
