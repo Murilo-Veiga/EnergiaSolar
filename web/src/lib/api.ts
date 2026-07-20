@@ -19,11 +19,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = init?.body instanceof FormData;
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      // FormData define seu próprio Content-Type (multipart + boundary) —
+      // forçar application/json aqui quebraria o upload de arquivo.
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(init?.headers ?? {}),
     },
   });
@@ -49,6 +52,7 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  upload: <T>(path: string, formData: FormData) => request<T>(path, { method: "POST", body: formData }),
 };
 
 // ---------- Tipos de resposta (espelham api-go/internal/httpapi) ----------
@@ -182,6 +186,40 @@ export interface DayStatus {
   alarm_detail: string | null;
   bandeira: string | null;
   bandeira_valor_kwh: number | null;
+}
+
+export interface ConsumptionUploadResult {
+  uc: string;
+  uc_label: string;
+  titular: string | null;
+  referencia: string;
+  consumo_kwh: number;
+  total_pagar_brl: number | null;
+  meses_historico_importados: number;
+}
+
+export interface ConsumptionLatest {
+  referencia: string;
+  consumed_kwh: number;
+  total_value_brl: number | null;
+}
+
+export interface ConsumptionUnitSummary {
+  uc_number: string;
+  label: string;
+  latest: ConsumptionLatest | null;
+}
+
+export interface ConsumptionSummary {
+  unidades: ConsumptionUnitSummary[];
+  economia_estimada_brl: number | null;
+}
+
+export interface ConsumptionHistoryRow {
+  referencia: string;
+  consumo_kwh: number;
+  total_pagar_brl: number | null;
+  bandeira: string | null;
 }
 
 export interface ForecastDay {

@@ -256,8 +256,8 @@ type dayStatusResponse struct {
 	Sunset             string    `json:"sunset"`
 	HasAlarm           *bool     `json:"has_alarm"`
 	AlarmDetail        *string   `json:"alarm_detail"`
-	// bandeira/bandeira_valor_kwh dependem da fatura Celesc (Fase 5,
-	// adiada) — ficam sempre null por enquanto.
+	// bandeira/bandeira_valor_kwh vêm da fatura Celesc mais recente (ver
+	// handleUploadConsumption) — ficam null até a 1a fatura ser importada.
 	Bandeira         *string  `json:"bandeira"`
 	BandeiraValorKWh *float64 `json:"bandeira_valor_kwh"`
 }
@@ -326,6 +326,14 @@ func (s *Server) handleDayStatus(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err, "falha ao consultar geração de hoje")
 		return
 	}
+
+	bandeira, bandeiraValorKWh, err := s.latestBandeira(ctx, plantID)
+	if err != nil {
+		writeInternalError(w, err, "falha ao consultar bandeira tarifária")
+		return
+	}
+	resp.Bandeira = bandeira
+	resp.BandeiraValorKWh = bandeiraValorKWh
 
 	writeJSON(w, http.StatusOK, resp)
 }

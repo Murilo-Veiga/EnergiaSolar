@@ -68,9 +68,14 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	// tarifa efetiva depende da última fatura Celesc — ainda não portado
-	// (Fase 5), então valor_estimado_brl/total_brl ficam sempre null, igual
-	// ao comportamento real hoje pra quem nunca enviou fatura.
+	// valor_estimado_brl/total_brl = geração × tarifa efetiva da última
+	// fatura Celesc — ficam null até a 1a fatura ser importada.
+	tarifa, err := s.tarifaEfetiva(ctx, plantID)
+	if err != nil {
+		writeInternalError(w, err, "falha ao calcular tarifa efetiva")
+		return
+	}
+
 	result := historyResponse{Rows: []historyRow{}}
 	for rows.Next() {
 		var day time.Time
@@ -79,7 +84,12 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err, "falha ao ler histórico")
 			return
 		}
-		result.Rows = append(result.Rows, historyRow{Date: day.Format("2006-01-02"), GeneratedKWh: &kwh})
+		row := historyRow{Date: day.Format("2006-01-02"), GeneratedKWh: &kwh}
+		if tarifa != nil {
+			valor := roundTo(kwh*(*tarifa), 2)
+			row.ValorEstimadoBR = &valor
+		}
+		result.Rows = append(result.Rows, row)
 		result.TotalKWh += kwh
 	}
 	if err := rows.Err(); err != nil {
@@ -87,6 +97,10 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result.TotalKWh = roundTo(result.TotalKWh, 1)
+	if tarifa != nil {
+		totalBRL := roundTo(result.TotalKWh*(*tarifa), 2)
+		result.TotalBRL = &totalBRL
+	}
 
 	previousTotal, err := s.periodTotalKWh(ctx, plantID, days, days)
 	if err != nil {
@@ -94,6 +108,10 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result.PreviousTotalKWh = roundTo(previousTotal, 1)
+	if tarifa != nil {
+		previousBRL := roundTo(result.PreviousTotalKWh*(*tarifa), 2)
+		result.PreviousTotalBRL = &previousBRL
+	}
 
 	writeJSON(w, http.StatusOK, result)
 }
