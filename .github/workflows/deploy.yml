@@ -1,0 +1,21 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest master
+        run: |
+          cd /var/www/EnergiaSolar
+          git fetch origin master
+          git reset --hard origin/master
+
+      - name: Rebuild and restart containers
+        run: |
+          cd /var/www/EnergiaSolar
+          docker compose up -d --build
