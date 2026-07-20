@@ -20,13 +20,33 @@ type runningWorker struct {
 // a config 1x do .env na subida e nunca mais mudava em runtime.
 func Supervisor(ctx context.Context, deps Deps) {
 	running := map[string]*runningWorker{}
+	var lastSettings SystemSettings
 
 	reconcile := func() {
+		settings, err := loadSystemSettings(ctx, deps.DB)
+		if err != nil {
+			deps.Log.Error("supervisor: falha ao carregar configurações do sistema, mantendo última conhecida", "error", err)
+			settings = lastSettings
+		}
+
 		creds, err := FetchEnabledCredentials(ctx, deps.DB)
 		if err != nil {
 			deps.Log.Error("supervisor: falha ao listar credenciais habilitadas", "error", err)
 			return
 		}
+
+		// URL padrão ou intervalo do worker mudou na tela de admin: derruba
+		// todo mundo pra já subir de novo com a config nova (mais simples
+		// que só reconfigurar o ticker de cada goroutine em voo).
+		if settings != lastSettings && lastSettings != (SystemSettings{}) {
+			deps.Log.Info("configurações do sistema mudaram, reiniciando workers",
+				"worker_interval_minutes", settings.WorkerIntervalMinutes)
+			for id, w := range running {
+				w.cancel()
+				delete(running, id)
+			}
+		}
+		lastSettings = settings
 
 		seen := make(map[string]bool, len(creds))
 		for _, cred := range creds {
@@ -36,7 +56,7 @@ func Supervisor(ctx context.Context, deps Deps) {
 			}
 			workerCtx, cancel := context.WithCancel(ctx)
 			running[cred.ID] = &runningWorker{cancel: cancel}
-			startWorker(workerCtx, deps, cred)
+			startWorker(workerCtx, deps, cred, settings)
 		}
 
 		// Credencial removida ou desabilitada desde a última reconciliação:
@@ -63,12 +83,12 @@ func Supervisor(ctx context.Context, deps Deps) {
 	}
 }
 
-func startWorker(ctx context.Context, deps Deps, cred CredentialRow) {
+func startWorker(ctx context.Context, deps Deps, cred CredentialRow, settings SystemSettings) {
 	switch cred.Brand {
 	case "huawei":
-		go RunHuaweiWorker(ctx, deps, cred)
+		go RunHuaweiWorker(ctx, deps, cred, settings)
 	case "foxess":
-		go RunFoxessWorker(ctx, deps, cred)
+		go RunFoxessWorker(ctx, deps, cred, settings)
 	default:
 		deps.Log.Error("marca de inversor desconhecida, ignorando credencial", "brand", cred.Brand, "credential_id", cred.ID)
 	}

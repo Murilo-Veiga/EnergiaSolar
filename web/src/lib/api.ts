@@ -45,6 +45,27 @@ export const api = {
 
 // ---------- Tipos de resposta (espelham api-go/internal/httpapi) ----------
 
+export interface Me {
+  user_id: string;
+  email: string;
+  name: string;
+  is_admin: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  is_admin: boolean;
+  created_at: string;
+  plants_count: number;
+}
+
+export interface SystemSettings {
+  huawei_base_url: string;
+  foxess_base_url: string;
+  worker_interval_minutes: number;
+}
+
 export interface Plant {
   id: string;
   name: string;

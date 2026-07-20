@@ -1,0 +1,979 @@
+{
+  "info": {
+    "name": "EnergiaSolar API (Go)",
+    "description": "Todos os endpoints do backend api-go (auth cookie-based, multi-tenant: cada usuário só vê as próprias usinas). Gerada a partir de api-go/internal/httpapi/router.go.\n\nComo usar:\n1. Selecione o environment 'EnergiaSolar API (Go)'.\n2. Rode Auth > Criar conta (ou Login, se a conta já existir) — o cookie de sessão fica no cookie jar do Postman automaticamente, nenhuma rota abaixo precisa de header manual.\n3. Pra testar as pastas 'Admin — *', promova a conta a admin direto no Postgres: `UPDATE users SET is_admin = true WHERE email = '...'` (não existe rota de auto-promoção, de propósito).\n4. As pastas Usinas / Credenciais / Admin — Usuários têm scripts de teste que capturam ids (plant_id, cred_id, target_user_id) nas variáveis do environment — rode 'Criar usina' e 'Criar credencial' antes das rotas que dependem desses ids.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Criar conta (signup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/auth/signup",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "description": "Cria a conta e já loga (Set-Cookie: session). O cookie httpOnly fica no cookie jar do Postman automaticamente — não precisa copiar nada manualmente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/auth/login",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Mesma resposta do signup. Necessário antes de qualquer rota abaixo, exceto /api/auth/*.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/auth/logout",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Limpa o cookie de sessão (Set-Cookie com Expires no passado)."
+          }
+        }
+      ],
+      "description": "Cadastro/login/logout — únicas rotas públicas da API, tudo o resto exige o cookie de sessão emitido aqui."
+    },
+    {
+      "name": "Minha conta",
+      "item": [
+        {
+          "name": "Ver perfil",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/me",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "description": "Dados da conta logada (nunca inclui password_hash)."
+          }
+        },
+        {
+          "name": "Atualizar perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/me",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "description": "Troca nome e e-mail da conta logada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"name\": \"Nome do usuário\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Trocar senha",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/me/password",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "password"
+              ]
+            },
+            "description": "Exige a senha atual. 204 No Content em caso de sucesso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{user_password}}\",\n  \"new_password\": \"nova-senha-123\"\n}"
+            }
+          }
+        }
+      ],
+      "description": "Ajustes da própria conta — todo usuário autenticado acessa, sem precisar ser admin."
+    },
+    {
+      "name": "Admin — Usuários",
+      "item": [
+        {
+          "name": "Listar usuários",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/users",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            },
+            "description": "Todos os usuários do sistema, com contagem de usinas."
+          }
+        },
+        {
+          "name": "Criar usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/users",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            },
+            "description": "Cria um usuário novo. Captura o id em {{target_user_id}} pras próximas requisições da pasta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"novo.usuario@example.com\",\n  \"password\": \"senha12345\",\n  \"is_admin\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('target_user_id', pm.response.json().id);",
+                  "    console.log('target_user_id capturado:', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver usuário",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/users/{{target_user_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{target_user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Atualizar usuário",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/users/{{target_user_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{target_user_id}}"
+              ]
+            },
+            "description": "Um admin não consegue remover o próprio privilégio de admin por essa rota (409).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"novo.usuario@example.com\",\n  \"is_admin\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Redefinir senha do usuário",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/users/{{target_user_id}}/password",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{target_user_id}}",
+                "password"
+              ]
+            },
+            "description": "Não exige a senha atual — o admin está redefinindo em nome de outra pessoa. 204 No Content.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"outra-senha-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Apagar usuário",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/users/{{target_user_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{target_user_id}}"
+              ]
+            },
+            "description": "Apaga o usuário e, em cascata, suas usinas e credenciais. Um admin não consegue apagar a própria conta por essa rota (409)."
+          }
+        }
+      ],
+      "description": "CRUD completo de usuários do sistema — exige is_admin=true na conta logada (RequireAdmin, 403 caso contrário)."
+    },
+    {
+      "name": "Admin — Configuração do sistema",
+      "item": [
+        {
+          "name": "Ver configurações do sistema",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/system-settings",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "system-settings"
+              ]
+            },
+            "description": "URL padrão das integrações Huawei/FoxESS e intervalo do worker de coleta."
+          }
+        },
+        {
+          "name": "Atualizar configurações do sistema",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/admin/system-settings",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "system-settings"
+              ]
+            },
+            "description": "worker_interval_minutes precisa estar entre 1 e 1440. collector-go relê essa tabela a cada reconciliação (até ~2min de atraso pra aplicar). URLs vazias caem no default hardcoded de cada client.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"huawei_base_url\": \"https://la5.fusionsolar.huawei.com\",\n  \"foxess_base_url\": \"https://www.foxesscloud.com\",\n  \"worker_interval_minutes\": 30\n}"
+            }
+          }
+        }
+      ],
+      "description": "Configuração global — não depende de usuário nem de usina. Exige is_admin=true."
+    },
+    {
+      "name": "Usinas",
+      "item": [
+        {
+          "name": "Listar usinas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants"
+              ]
+            },
+            "description": "Usinas do usuário logado (nunca de outro usuário)."
+          }
+        },
+        {
+          "name": "Criar usina",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants"
+              ]
+            },
+            "description": "Captura o id em {{plant_id}} — usado por todas as rotas abaixo de /api/plants/:plantID/*.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Usina de teste\",\n  \"lat\": -26.356268,\n  \"lon\": -48.807868,\n  \"installed_power_kwp\": 6.45\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('plant_id', pm.response.json().id);",
+                  "    console.log('plant_id capturado:', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver usina",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Atualizar usina",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Usina de teste\",\n  \"lat\": -26.356268,\n  \"lon\": -48.807868,\n  \"installed_power_kwp\": 6.45\n}"
+            }
+          }
+        },
+        {
+          "name": "Apagar usina",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}"
+              ]
+            },
+            "description": "Apaga em cascata as credenciais de inversor e todo o histórico da usina."
+          }
+        }
+      ],
+      "description": "CRUD de usinas — sempre restrito ao usuário dono (authorizePlant: usina de outro usuário sempre responde 404, nunca 403)."
+    },
+    {
+      "name": "Credenciais de inversor",
+      "item": [
+        {
+          "name": "Listar credenciais",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Testar conexão — Huawei",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config/test",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config",
+                "test"
+              ]
+            },
+            "description": "Não grava nada — só valida login + getStationList. base_url vazio usa o padrão global (Admin > Configuração do sistema).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"huawei\",\n  \"username\": \"MARCOS_ENDLER\",\n  \"system_code\": \"solturi123\",\n  \"base_url\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Testar conexão — FoxESS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config/test",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config",
+                "test"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"foxess\",\n  \"api_key\": \"{{foxess_api_key}}\",\n  \"base_url\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Criar credencial — Huawei",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config"
+              ]
+            },
+            "description": "1 credencial por marca por usina (UNIQUE plant_id+brand) — repetir dá 409, use PUT pra atualizar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"huawei\",\n  \"username\": \"MARCOS_ENDLER\",\n  \"system_code\": \"solturi123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('cred_id', pm.response.json().id);",
+                  "    console.log('cred_id capturado:', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar credencial — FoxESS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"foxess\",\n  \"api_key\": \"{{foxess_api_key}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Habilitar/desabilitar credencial",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config/{{cred_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config",
+                "{{cred_id}}"
+              ]
+            },
+            "description": "Também aceita trocar o segredo (username/system_code ou api_key) no mesmo body — nesse caso zera a descoberta em cache (station_code/dev_dn/device_sn).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Apagar credencial",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters-config/{{cred_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters-config",
+                "{{cred_id}}"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Cadastro de acesso às APIs Huawei FusionSolar / FoxESS Cloud por usina — credenciais ficam cifradas (AES-256-GCM) em repouso."
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Resumo da usina",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/summary",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "summary"
+              ]
+            },
+            "description": "Potência instantânea, geração de hoje, economia estimada, status (online/alerta/pendente)."
+          }
+        },
+        {
+          "name": "Status por inversor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/inverters",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "inverters"
+              ]
+            },
+            "description": "1 entrada por marca habilitada (huawei/foxess): potência, geração do dia, temperatura, status."
+          }
+        },
+        {
+          "name": "Saúde do collector",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/collector-health?days=30",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "collector-health"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Ciclos totais/falhos e % de confiabilidade por marca, na janela de dias pedida."
+          }
+        }
+      ],
+      "description": "Dados usados na tela inicial do dashboard."
+    },
+    {
+      "name": "Histórico",
+      "item": [
+        {
+          "name": "Geração por período",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/history?range=semana",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "semana"
+                }
+              ]
+            },
+            "description": "range: dia | semana | mes | ano."
+          }
+        },
+        {
+          "name": "Recordes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/history/records",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "history",
+                "records"
+              ]
+            },
+            "description": "Melhor dia, melhor mês, pico de potência."
+          }
+        },
+        {
+          "name": "Geração por inversor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/history/inverters?range=mes",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "history",
+                "inverters"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "mes"
+                }
+              ]
+            },
+            "description": "Série diária kWh separada por marca (huawei_kwh / foxess_kwh)."
+          }
+        }
+      ],
+      "description": "Tela de Histórico — séries e agregados."
+    },
+    {
+      "name": "Anotações",
+      "item": [
+        {
+          "name": "Listar anotações",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/annotations?range=ano",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "annotations"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "ano"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar/atualizar anotação",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/annotations",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "annotations"
+              ]
+            },
+            "description": "1 anotação por dia — gravar de novo no mesmo dia sobrescreve a nota anterior (upsert).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-07-20\",\n  \"note\": \"Manutenção preventiva no inversor Huawei\"\n}"
+            }
+          }
+        }
+      ],
+      "description": "Notas soltas por dia, associadas à usina (ex.: manutenção, queda de energia)."
+    },
+    {
+      "name": "Clima e previsão",
+      "item": [
+        {
+          "name": "Status do dia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/day-status",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "day-status"
+              ]
+            },
+            "description": "Geração de hoje, clima observado, radiação solar, bandeira tarifária."
+          }
+        },
+        {
+          "name": "Previsão",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_base_url}}/api/plants/{{plant_id}}/forecast",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "plants",
+                "{{plant_id}}",
+                "forecast"
+              ]
+            },
+            "description": "Previsão de 5 dias (Open-Meteo) com rating bom/moderado/ruim de geração esperada."
+          }
+        }
+      ],
+      "description": "Dados climáticos e de previsão usados nos cards de clima do dashboard."
+    }
+  ]
+}

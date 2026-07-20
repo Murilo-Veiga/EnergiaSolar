@@ -250,13 +250,29 @@ func (s *Server) handleTestInverterCredential(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
+	// Sem URL própria na credencial: usa o padrão global (Administração >
+	// Configuração do sistema) antes de cair no default hardcoded do
+	// client — mesmo fallback aplicado pelos workers em produção (ver
+	// internal/collector/huawei_worker.go / foxess_worker.go), pra o teste
+	// refletir a URL que vai ser usada de verdade.
+	baseURL := in.BaseURL
+	if baseURL == "" {
+		if settings, err := s.loadSystemSettings(ctx); err == nil {
+			if in.Brand == "huawei" {
+				baseURL = settings.HuaweiBaseURL
+			} else if in.Brand == "foxess" {
+				baseURL = settings.FoxessBaseURL
+			}
+		}
+	}
+
 	switch in.Brand {
 	case "huawei":
 		if in.Username == "" || in.SystemCode == "" {
 			writeError(w, http.StatusBadRequest, "username e system_code são obrigatórios")
 			return
 		}
-		client, err := huawei.NewClient(in.Username, in.SystemCode, in.BaseURL)
+		client, err := huawei.NewClient(in.Username, in.SystemCode, baseURL)
 		if err != nil {
 			writeJSON(w, http.StatusOK, testConnectionResult{Message: err.Error()})
 			return
@@ -281,7 +297,7 @@ func (s *Server) handleTestInverterCredential(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusBadRequest, "api_key é obrigatória")
 			return
 		}
-		client := foxess.NewClient(in.APIKey, in.BaseURL)
+		client := foxess.NewClient(in.APIKey, baseURL)
 		devices, err := client.GetDeviceList(ctx)
 		if err != nil {
 			writeJSON(w, http.StatusOK, testConnectionResult{Message: err.Error()})

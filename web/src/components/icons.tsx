@@ -86,6 +86,34 @@ const ICONS: Record<string, (bg: string) => JSX.Element> = {
   ),
   shield: () => <path d="M12 2.5 L19.5 5.5 V11.5 C19.5 16.5 16.3 20 12 21.5 C7.7 20 4.5 16.5 4.5 11.5 V5.5 Z" fill="currentColor" />,
   cloud: () => <path d="M7.5 18.5a4.3 4.3 0 0 1-.4-8.58 5.4 5.4 0 0 1 10.4-1.9 3.9 3.9 0 0 1-.7 10.48Z" fill="currentColor" />,
+  drizzle: () => (
+    <>
+      <path d="M7.5 14.5a4.3 4.3 0 0 1-.4-8.58 5.4 5.4 0 0 1 10.4-1.9 3.9 3.9 0 0 1-.7 10.48Z" fill="currentColor" />
+      <line x1="8" y1="17.5" x2="7" y2="21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="12" y1="17.5" x2="11" y2="21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="16" y1="17.5" x2="15" y2="21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </>
+  ),
+  user: () => (
+    <>
+      <circle cx="12" cy="8" r="3.6" fill="currentColor" />
+      <path d="M4.5 20.5c0-4.1 3.4-6.8 7.5-6.8s7.5 2.7 7.5 6.8" fill="currentColor" />
+    </>
+  ),
+  logout: () => (
+    <>
+      <path
+        d="M10.5 3.5H6.2A1.7 1.7 0 0 0 4.5 5.2v13.6a1.7 1.7 0 0 0 1.7 1.7h4.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M15.5 8 20 12 15.5 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="20" y1="12" x2="9.5" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </>
+  ),
   settings: () => (
     <>
       <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -104,13 +132,19 @@ export function iconBody(name: string, bg: string): JSX.Element | null {
   return render ? render(bg) : null;
 }
 
+// Espelha ICON_BG em templates/index.html EXATAMENTE — precisa ser a MESMA
+// cor translúcida de fundo do badge (não a cor sólida do traço), porque
+// alguns ícones (wallet, mapPin, alertTriangle) têm um "furo" interno que
+// só fica invisível se pintado com o fundo real do chip ao redor.
 const COLOR_BG: Record<string, string> = {
-  blue: "#3987e5",
-  aqua: "#199e70",
-  green: "#0ca30c",
-  gold: "#fab219",
-  red: "#d03b3b",
+  blue: "rgba(57,135,229,0.14)",
+  aqua: "rgba(25,158,112,0.14)",
+  green: "rgba(12,163,12,0.13)",
+  gold: "rgba(250,178,25,0.14)",
+  red: "rgba(208,59,59,0.16)",
 };
+
+export type IconColor = "blue" | "aqua" | "green" | "gold" | "red";
 
 export function IconBadge({
   name,
@@ -118,13 +152,16 @@ export function IconBadge({
   size = "nav",
 }: {
   name: string;
-  color?: "blue" | "aqua" | "green" | "gold" | "red";
-  size?: "nav" | "card" | "alert";
+  color?: IconColor;
+  size?: "nav" | "card" | "alert" | "fc";
 }) {
   const bg = COLOR_BG[color];
+  // Espelha paintIconBadges(): size-card renderiza o SVG em 18px, todo o
+  // resto (nav/alert/fc) em 15px — só o viewBox interno continua 24x24.
+  const pixelSize = size === "card" ? 18 : 15;
   return (
     <span className={`icon-badge ${color} size-${size}`}>
-      <svg width="24" height="24" viewBox="0 0 24 24">
+      <svg width={pixelSize} height={pixelSize} viewBox="0 0 24 24">
         {iconBody(name, bg)}
       </svg>
     </span>

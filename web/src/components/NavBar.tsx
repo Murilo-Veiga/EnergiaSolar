@@ -1,16 +1,25 @@
 import { IconBadge } from "./icons";
+import { NewBadge } from "./NewBadge";
 import type { TabName } from "../App";
 import { useAuth } from "../context/AuthContext";
 
-const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "green" | "aqua" }[] = [
+const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "green" | "aqua"; newKey?: string }[] = [
   { tab: "dashboard", label: "Dashboard", icon: "layoutGrid", color: "blue" },
   { tab: "historico", label: "Histórico", icon: "trendingUp", color: "blue" },
-  { tab: "saude", label: "Saúde da usina", icon: "activity", color: "green" },
+  { tab: "saude", label: "Saúde da usina", icon: "activity", color: "green", newKey: "nav-saude" },
   { tab: "consumo", label: "Consumo", icon: "wallet", color: "aqua" },
   { tab: "administracao", label: "Administração", icon: "settings", color: "blue" },
 ];
 
-export function NavBar({ active, onSelect }: { active: TabName; onSelect: (tab: TabName) => void }) {
+export function NavBar({
+  active,
+  onSelect,
+  onMyAccount,
+}: {
+  active: TabName;
+  onSelect: (tab: TabName) => void;
+  onMyAccount: () => void;
+}) {
   const { logout } = useAuth();
 
   return (
@@ -31,13 +40,19 @@ export function NavBar({ active, onSelect }: { active: TabName; onSelect: (tab: 
             style={{ cursor: "pointer" }}
           >
             <IconBadge name={item.icon} color={item.color} size="nav" />
-            {item.label}
+            {" " + item.label}
+            {item.newKey && <NewBadge featureKey={item.newKey} />}
           </a>
         ))}
       </nav>
-      <div style={{ marginTop: "auto", paddingTop: 16 }}>
+      <div className="nav" style={{ marginTop: "auto", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        <a className={active === "minha-conta" ? "active" : ""} onClick={onMyAccount} style={{ cursor: "pointer" }}>
+          <IconBadge name="user" color="blue" size="nav" />
+          {" Minha conta"}
+        </a>
         <a onClick={() => void logout()} style={{ cursor: "pointer" }}>
-          Sair
+          <IconBadge name="logout" color="red" size="nav" />
+          {" Sair"}
         </a>
       </div>
     </aside>

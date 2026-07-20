@@ -108,7 +108,7 @@ func pollHuawei(ctx context.Context, client *huawei.Client, stationCode, devDn s
 // credencial, cada uma com seu próprio estado de reset diário e contador
 // de falhas (nunca compartilhado entre inversores, diferente do Python
 // original que usava mapas globais por nome de inversor).
-func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow) {
+func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow, settings SystemSettings) {
 	log := deps.Log.With("brand", "huawei", "plant_id", cred.PlantID, "credential_id", cred.ID)
 
 	var secrets huaweiSecrets
@@ -116,7 +116,14 @@ func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow) {
 		log.Error("falha ao decifrar credencial, worker não vai iniciar", "error", err)
 		return
 	}
-	client, err := huawei.NewClient(secrets.Username, secrets.SystemCode, secrets.BaseURL)
+	// Credencial sem URL própria: cai na URL padrão configurada em
+	// Administração > Configuração do sistema (se vazia também, o client
+	// usa o próprio default hardcoded — ver huawei.DefaultBaseURL).
+	baseURL := secrets.BaseURL
+	if baseURL == "" {
+		baseURL = settings.HuaweiBaseURL
+	}
+	client, err := huawei.NewClient(secrets.Username, secrets.SystemCode, baseURL)
 	if err != nil {
 		log.Error("falha ao criar cliente huawei, worker não vai iniciar", "error", err)
 		return
@@ -164,7 +171,7 @@ func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow) {
 	}
 
 	poll()
-	ticker := time.NewTicker(30 * time.Minute)
+	ticker := time.NewTicker(workerInterval(settings))
 	defer ticker.Stop()
 	for {
 		select {

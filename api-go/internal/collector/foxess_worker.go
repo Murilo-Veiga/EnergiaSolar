@@ -75,7 +75,7 @@ func pollFoxess(ctx context.Context, client *foxess.Client, sn string) (foxessPo
 // RunFoxessWorker é o equivalente de RunHuaweiWorker pra uma credencial
 // FoxESS — sem alarme (getAlarmList é exclusivo da NBI da Huawei neste
 // projeto).
-func RunFoxessWorker(ctx context.Context, deps Deps, cred CredentialRow) {
+func RunFoxessWorker(ctx context.Context, deps Deps, cred CredentialRow, settings SystemSettings) {
 	log := deps.Log.With("brand", "foxess", "plant_id", cred.PlantID, "credential_id", cred.ID)
 
 	var secrets foxessSecrets
@@ -83,7 +83,11 @@ func RunFoxessWorker(ctx context.Context, deps Deps, cred CredentialRow) {
 		log.Error("falha ao decifrar credencial, worker não vai iniciar", "error", err)
 		return
 	}
-	client := foxess.NewClient(secrets.APIKey, secrets.BaseURL)
+	baseURL := secrets.BaseURL
+	if baseURL == "" {
+		baseURL = settings.FoxessBaseURL
+	}
+	client := foxess.NewClient(secrets.APIKey, baseURL)
 
 	deviceSN, err := ensureFoxessDiscovery(ctx, cred, client, func(sn string) error {
 		_, err := deps.DB.Exec(ctx,
@@ -127,7 +131,7 @@ func RunFoxessWorker(ctx context.Context, deps Deps, cred CredentialRow) {
 	}
 
 	poll()
-	ticker := time.NewTicker(30 * time.Minute)
+	ticker := time.NewTicker(workerInterval(settings))
 	defer ticker.Stop()
 	for {
 		select {
