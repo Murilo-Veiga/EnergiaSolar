@@ -16,47 +16,71 @@ export function NavBar({
   active,
   onSelect,
   onMyAccount,
+  mobileOpen,
+  onCloseMobile,
 }: {
   active: TabName;
   onSelect: (tab: TabName) => void;
   onMyAccount: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }) {
   const { logout, isAdmin } = useAuth();
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
+  // No mobile o menu é um drawer — qualquer navegação (item, conta, sair)
+  // já fecha ele sozinho, sem precisar tocar de novo no overlay/X.
+  function select(tab: TabName) {
+    onSelect(tab);
+    onCloseMobile();
+  }
+
   return (
-    <aside className="sidebar" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="brand">
-        <IconBadge name="sun" color="blue" size="nav" />
-        <div>
-          <div className="name">Solar Home</div>
-          <div className="sub">Painel de Monitoramento</div>
+    <>
+      {mobileOpen && <div className="sidebar-overlay" onClick={onCloseMobile} />}
+      <aside className={`sidebar ${mobileOpen ? "open" : ""}`} style={{ display: "flex", flexDirection: "column" }}>
+        <div className="brand">
+          <IconBadge name="sun" color="blue" size="nav" />
+          <div>
+            <div className="name">Solar Home</div>
+            <div className="sub">Painel de Monitoramento</div>
+          </div>
+          <button className="sidebar-close" type="button" onClick={onCloseMobile} aria-label="Fechar menu">
+            ×
+          </button>
         </div>
-      </div>
-      <nav className="nav">
-        {items.map((item) => (
+        <nav className="nav">
+          {items.map((item) => (
+            <a
+              key={item.tab}
+              className={active === item.tab ? "active" : ""}
+              onClick={() => select(item.tab)}
+              style={{ cursor: "pointer" }}
+            >
+              <IconBadge name={item.icon} color={item.color} size="nav" />
+              {" " + item.label}
+              {item.newKey && <NewBadge featureKey={item.newKey} />}
+            </a>
+          ))}
+        </nav>
+        <div className="nav" style={{ marginTop: "auto", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
           <a
-            key={item.tab}
-            className={active === item.tab ? "active" : ""}
-            onClick={() => onSelect(item.tab)}
+            className={active === "minha-conta" ? "active" : ""}
+            onClick={() => {
+              onMyAccount();
+              onCloseMobile();
+            }}
             style={{ cursor: "pointer" }}
           >
-            <IconBadge name={item.icon} color={item.color} size="nav" />
-            {" " + item.label}
-            {item.newKey && <NewBadge featureKey={item.newKey} />}
+            <IconBadge name="user" color="blue" size="nav" />
+            {" Minha conta"}
           </a>
-        ))}
-      </nav>
-      <div className="nav" style={{ marginTop: "auto", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-        <a className={active === "minha-conta" ? "active" : ""} onClick={onMyAccount} style={{ cursor: "pointer" }}>
-          <IconBadge name="user" color="blue" size="nav" />
-          {" Minha conta"}
-        </a>
-        <a onClick={() => void logout()} style={{ cursor: "pointer" }}>
-          <IconBadge name="logout" color="red" size="nav" />
-          {" Sair"}
-        </a>
-      </div>
-    </aside>
+          <a onClick={() => void logout()} style={{ cursor: "pointer" }}>
+            <IconBadge name="logout" color="red" size="nav" />
+            {" Sair"}
+          </a>
+        </div>
+      </aside>
+    </>
   );
 }

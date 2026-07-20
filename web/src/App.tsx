@@ -10,6 +10,7 @@ import { HistoricoTab } from "./pages/Dashboard/HistoricoTab";
 import { SaudeTab } from "./pages/Dashboard/SaudeTab";
 import { ConsumoTab } from "./pages/Dashboard/ConsumoTab";
 import { NavBar } from "./components/NavBar";
+import { IconBadge } from "./components/icons";
 
 export type TabName = "dashboard" | "historico" | "saude" | "consumo" | "minhas-usinas" | "administracao" | "minha-conta";
 
@@ -28,6 +29,7 @@ function App() {
   const [tab, setTab] = useState<TabName>("dashboard");
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   if (loading) {
     return <div className="app-loading">Carregando...</div>;
@@ -47,10 +49,21 @@ function App() {
 
   return (
     <div className="app">
-      <NavBar active={effectiveTab} onSelect={setTab} onMyAccount={() => setTab("minha-conta")} />
+      <NavBar
+        active={effectiveTab}
+        onSelect={setTab}
+        onMyAccount={() => setTab("minha-conta")}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
       <main className="main">
         <div className="topbar">
-          <h2>{TITLES[effectiveTab]}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="nav-hamburger" type="button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menu">
+              <IconBadge name="menu" color="blue" size="nav" />
+            </button>
+            <h2>{TITLES[effectiveTab]}</h2>
+          </div>
           {effectiveTab === "dashboard" && updatedAt && (
             <div className="updated">
               <span className="sw" /> Atualizado às {new Date(updatedAt).toLocaleTimeString("pt-BR")}

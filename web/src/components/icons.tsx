@@ -125,6 +125,13 @@ const ICONS: Record<string, (bg: string) => JSX.Element> = {
       />
     </>
   ),
+  menu: () => (
+    <>
+      <rect x="3" y="5.4" width="18" height="2.3" rx="1.15" fill="currentColor" />
+      <rect x="3" y="10.85" width="18" height="2.3" rx="1.15" fill="currentColor" />
+      <rect x="3" y="16.3" width="18" height="2.3" rx="1.15" fill="currentColor" />
+    </>
+  ),
 };
 
 export function iconBody(name: string, bg: string): JSX.Element | null {
