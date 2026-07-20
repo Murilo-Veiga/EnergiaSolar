@@ -6,14 +6,14 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"energiasolar-api/internal/auth"
 )
 
 type updateProfileRequest struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
 }
 
 type updatePasswordRequest struct {
@@ -25,9 +25,10 @@ type updatePasswordRequest struct {
 func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserIDFromContext(r.Context())
 
-	var email, name string
+	var email, username, name string
 	var isAdmin bool
-	err := s.DB.QueryRow(r.Context(), `SELECT email, name, is_admin FROM users WHERE id = $1`, userID).Scan(&email, &name, &isAdmin)
+	err := s.DB.QueryRow(r.Context(), `SELECT email, COALESCE(username, ''), name, is_admin FROM users WHERE id = $1`, userID).
+		Scan(&email, &username, &name, &isAdmin)
 	if isNoRows(err) {
 		writeError(w, http.StatusNotFound, "usuário não encontrado")
 		return
@@ -36,10 +37,10 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err, "falha ao consultar usuário")
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: email, Name: name, IsAdmin: isAdmin})
+	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: email, Username: username, Name: name, IsAdmin: isAdmin})
 }
 
-// handleUpdateProfile troca o e-mail e o nome da conta logada.
+// handleUpdateProfile troca o e-mail, o username e o nome da conta logada.
 func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserIDFromContext(r.Context())
 
@@ -49,17 +50,19 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.DB.Exec(r.Context(), `UPDATE users SET email = $1, name = $2 WHERE id = $3`, req.Email, req.Name, userID)
+	_, err := s.DB.Exec(r.Context(),
+		`UPDATE users SET email = $1, username = NULLIF($2, ''), name = $3 WHERE id = $4`,
+		req.Email, req.Username, req.Name, userID,
+	)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == postgresUniqueViolation {
-			writeError(w, http.StatusConflict, "e-mail já cadastrado")
+		if msg, ok := usernameConflictMessage(err); ok {
+			writeError(w, http.StatusConflict, msg)
 			return
 		}
 		writeInternalError(w, err, "falha ao atualizar perfil")
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: req.Email, Name: req.Name})
+	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: req.Email, Username: req.Username, Name: req.Name})
 }
 
 // handleUpdatePassword troca a senha da conta logada — exige a senha atual.

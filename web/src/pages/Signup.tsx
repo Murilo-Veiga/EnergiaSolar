@@ -5,6 +5,7 @@ import { ApiError } from "../lib/api";
 export function Signup({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
   const { signup } = useAuth();
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -18,7 +19,7 @@ export function Signup({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
     }
     setSubmitting(true);
     try {
-      await signup(email, password);
+      await signup(email, password, username);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao criar conta");
     } finally {
@@ -33,6 +34,10 @@ export function Signup({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
         <label>
           E-mail
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label>
+          Nome de usuário (opcional)
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="pra entrar sem digitar o e-mail" />
         </label>
         <label>
           Senha (mínimo 8 caracteres)

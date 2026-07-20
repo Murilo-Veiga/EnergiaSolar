@@ -217,6 +217,9 @@ function UserManagement({ currentUserId }: { currentUserId: string }) {
               <div className="plant-list-item" key={u.id} style={{ cursor: "default" }}>
                 <span>
                   {u.email}
+                  {u.username && (
+                    <span style={{ color: "var(--ink-muted)", fontSize: 12, marginLeft: 8 }}>@{u.username}</span>
+                  )}
                   {u.is_admin && (
                     <span className="badge on" style={{ marginLeft: 8 }}>
                       admin
@@ -259,6 +262,7 @@ function EditUserForm({
   onCancel: () => void;
 }) {
   const [email, setEmail] = useState(user.email);
+  const [username, setUsername] = useState(user.username);
   const [isAdminFlag, setIsAdminFlag] = useState(user.is_admin);
   const [newPassword, setNewPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -269,7 +273,7 @@ function EditUserForm({
     setSubmitting(true);
     setError(null);
     try {
-      await api.put(`/api/admin/users/${user.id}`, { email, is_admin: isAdminFlag });
+      await api.put(`/api/admin/users/${user.id}`, { email, username, is_admin: isAdminFlag });
       if (newPassword) {
         await api.put(`/api/admin/users/${user.id}/password`, { new_password: newPassword });
       }
@@ -286,6 +290,10 @@ function EditUserForm({
       <label>
         E-mail
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      </label>
+      <label>
+        Nome de usuário (opcional)
+        <input value={username} onChange={(e) => setUsername(e.target.value)} />
       </label>
       <label>
         Nova senha (opcional)
@@ -322,6 +330,7 @@ function EditUserForm({
 function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdminFlag, setIsAdminFlag] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -332,8 +341,9 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
     setSubmitting(true);
     setError(null);
     try {
-      await api.post("/api/admin/users", { email, password, is_admin: isAdminFlag });
+      await api.post("/api/admin/users", { email, username, password, is_admin: isAdminFlag });
       setEmail("");
+      setUsername("");
       setPassword("");
       setIsAdminFlag(false);
       setOpen(false);
@@ -358,6 +368,10 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
       <label>
         E-mail
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      </label>
+      <label>
+        Nome de usuário (opcional)
+        <input value={username} onChange={(e) => setUsername(e.target.value)} />
       </label>
       <label>
         Senha

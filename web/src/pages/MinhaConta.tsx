@@ -27,7 +27,7 @@ export function MinhaConta() {
     <div>
       <div className="admin-section">
         <h3>Conta</h3>
-        <ProfileForm name={me.name} email={me.email} onSaved={load} />
+        <ProfileForm name={me.name} email={me.email} username={me.username} onSaved={load} />
       </div>
       <div className="admin-section">
         <h3>Senha</h3>
@@ -37,9 +37,20 @@ export function MinhaConta() {
   );
 }
 
-function ProfileForm({ name, email, onSaved }: { name: string; email: string; onSaved: () => Promise<void> }) {
+function ProfileForm({
+  name,
+  email,
+  username,
+  onSaved,
+}: {
+  name: string;
+  email: string;
+  username: string;
+  onSaved: () => Promise<void>;
+}) {
   const [nameValue, setNameValue] = useState(name);
   const [emailValue, setEmailValue] = useState(email);
+  const [usernameValue, setUsernameValue] = useState(username);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -47,7 +58,8 @@ function ProfileForm({ name, email, onSaved }: { name: string; email: string; on
   useEffect(() => {
     setNameValue(name);
     setEmailValue(email);
-  }, [name, email]);
+    setUsernameValue(username);
+  }, [name, email, username]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -55,7 +67,7 @@ function ProfileForm({ name, email, onSaved }: { name: string; email: string; on
     setError(null);
     setSuccess(false);
     try {
-      await api.put("/api/me", { email: emailValue, name: nameValue });
+      await api.put("/api/me", { email: emailValue, name: nameValue, username: usernameValue });
       setSuccess(true);
       await onSaved();
     } catch (err) {
@@ -74,6 +86,14 @@ function ProfileForm({ name, email, onSaved }: { name: string; email: string; on
       <label>
         E-mail
         <input type="email" value={emailValue} onChange={(e) => setEmailValue(e.target.value)} required />
+      </label>
+      <label>
+        Nome de usuário (opcional)
+        <input
+          value={usernameValue}
+          onChange={(e) => setUsernameValue(e.target.value)}
+          placeholder="pra entrar sem digitar o e-mail"
+        />
       </label>
       <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button className="btn" type="submit" disabled={submitting}>

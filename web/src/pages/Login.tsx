@@ -4,7 +4,7 @@ import { ApiError } from "../lib/api";
 
 export function Login({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -14,7 +14,7 @@ export function Login({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(identifier, password);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao entrar");
     } finally {
@@ -27,8 +27,8 @@ export function Login({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
       <form className="card auth-card" onSubmit={handleSubmit}>
         <h1>Entrar</h1>
         <label>
-          E-mail
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          E-mail ou usuário
+          <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
         </label>
         <label>
           Senha

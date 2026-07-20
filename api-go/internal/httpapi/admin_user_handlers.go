@@ -2,12 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"energiasolar-api/internal/auth"
 )
@@ -15,6 +13,7 @@ import (
 type adminUser struct {
 	ID          string    `json:"id"`
 	Email       string    `json:"email"`
+	Username    string    `json:"username"`
 	IsAdmin     bool      `json:"is_admin"`
 	CreatedAt   time.Time `json:"created_at"`
 	PlantsCount int       `json:"plants_count"`
@@ -22,13 +21,15 @@ type adminUser struct {
 
 type adminCreateUserRequest struct {
 	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 	IsAdmin  bool   `json:"is_admin"`
 }
 
 type adminUpdateUserRequest struct {
-	Email   string `json:"email"`
-	IsAdmin bool   `json:"is_admin"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"is_admin"`
 }
 
 type adminResetPasswordRequest struct {
@@ -38,7 +39,7 @@ type adminResetPasswordRequest struct {
 // handleAdminListUsers lista todos os usuários do sistema — só admins acessam.
 func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT u.id, u.email, u.is_admin, u.created_at, count(p.id)
+		SELECT u.id, u.email, COALESCE(u.username, ''), u.is_admin, u.created_at, count(p.id)
 		FROM users u
 		LEFT JOIN plants p ON p.user_id = u.id
 		GROUP BY u.id
@@ -53,7 +54,7 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 	users := []adminUser{}
 	for rows.Next() {
 		var u adminUser
-		if err := rows.Scan(&u.ID, &u.Email, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount); err != nil {
 			writeInternalError(w, err, "falha ao listar usuários")
 			return
 		}
@@ -82,14 +83,13 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	var u adminUser
 	err = s.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, is_admin) VALUES ($1, $2, $3)
-		 RETURNING id, email, is_admin, created_at`,
-		req.Email, hash, req.IsAdmin,
-	).Scan(&u.ID, &u.Email, &u.IsAdmin, &u.CreatedAt)
+		`INSERT INTO users (email, username, password_hash, is_admin) VALUES ($1, NULLIF($2, ''), $3, $4)
+		 RETURNING id, email, COALESCE(username, ''), is_admin, created_at`,
+		req.Email, req.Username, hash, req.IsAdmin,
+	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == postgresUniqueViolation {
-			writeError(w, http.StatusConflict, "e-mail já cadastrado")
+		if msg, ok := usernameConflictMessage(err); ok {
+			writeError(w, http.StatusConflict, msg)
 			return
 		}
 		writeInternalError(w, err, "falha ao criar usuário")
@@ -104,12 +104,12 @@ func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
 
 	var u adminUser
 	err := s.DB.QueryRow(r.Context(), `
-		SELECT u.id, u.email, u.is_admin, u.created_at, count(p.id)
+		SELECT u.id, u.email, COALESCE(u.username, ''), u.is_admin, u.created_at, count(p.id)
 		FROM users u
 		LEFT JOIN plants p ON p.user_id = u.id
 		WHERE u.id = $1
 		GROUP BY u.id
-	`, userID).Scan(&u.ID, &u.Email, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount)
+	`, userID).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount)
 	if isNoRows(err) {
 		writeError(w, http.StatusNotFound, "usuário não encontrado")
 		return
@@ -142,18 +142,17 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	var u adminUser
 	err := s.DB.QueryRow(r.Context(),
-		`UPDATE users SET email = $1, is_admin = $2 WHERE id = $3
-		 RETURNING id, email, is_admin, created_at`,
-		req.Email, req.IsAdmin, userID,
-	).Scan(&u.ID, &u.Email, &u.IsAdmin, &u.CreatedAt)
+		`UPDATE users SET email = $1, username = NULLIF($2, ''), is_admin = $3 WHERE id = $4
+		 RETURNING id, email, COALESCE(username, ''), is_admin, created_at`,
+		req.Email, req.Username, req.IsAdmin, userID,
+	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
 	if isNoRows(err) {
 		writeError(w, http.StatusNotFound, "usuário não encontrado")
 		return
 	}
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == postgresUniqueViolation {
-			writeError(w, http.StatusConflict, "e-mail já cadastrado")
+		if msg, ok := usernameConflictMessage(err); ok {
+			writeError(w, http.StatusConflict, msg)
 			return
 		}
 		writeInternalError(w, err, "falha ao atualizar usuário")
