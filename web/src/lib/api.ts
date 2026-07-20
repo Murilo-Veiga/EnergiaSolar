@@ -1,6 +1,6 @@
 // Cliente HTTP único da API — sessão via cookie httpOnly (nunca lida
 // diretamente pelo React), sempre com credentials:"include".
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8090";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8091";
 
 export class ApiError extends Error {
   status: number;

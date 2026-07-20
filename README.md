@@ -58,13 +58,14 @@ cp .env.example .env   # preencher POSTGRES_PASSWORD, JWT_SECRET, CONFIG_ENCRYPT
 docker compose up -d --build
 ```
 
-- Painel: http://localhost:3000
-- API: http://localhost:8090
+- Painel: http://localhost:8090
+- API: http://localhost:8091
 
-Primeiro acesso: crie uma conta pela tela de cadastro, cadastre sua usina
-em Administração > Minhas usinas, e configure as credenciais Huawei/FoxESS
-por lá (usuário/senha ou API key, cifradas em repouso). Não existe seed
-automático de dados de exemplo.
+Primeiro acesso: não há mais cadastro público — crie o primeiro usuário
+direto no banco ou peça pra um admin existente criar em Administração >
+Gestão de usuários. Depois, cadastre sua usina em Minhas usinas e configure
+as credenciais Huawei/FoxESS por lá (usuário/senha ou API key, cifradas em
+repouso). Não existe seed automático de dados de exemplo.
 
 `.env` nunca é commitado (está no `.gitignore`); use `.env.example` como
 referência. As URLs padrão das integrações Huawei/FoxESS e o intervalo do

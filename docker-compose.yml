@@ -17,7 +17,7 @@ services:
     container_name: solar-api
     restart: unless-stopped
     ports:
-      - "8090:8000"
+      - "8091:8000"
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-solarhome}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-solarhome}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET}
@@ -40,11 +40,11 @@ services:
     build:
       context: ./web
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8090}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8091}
     container_name: solar-web
     restart: unless-stopped
     ports:
-      - "3000:8000"
+      - "8090:8000"
     depends_on:
       - api
 

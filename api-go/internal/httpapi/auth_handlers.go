@@ -67,7 +67,11 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, userID string) error {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		// None (não Lax) porque o frontend costuma ser acessado num domínio
+		// diferente do da api (ex.: túnel ngrok na frente do :8090 enquanto a
+		// api segue em :8091) — Lax não é enviado em fetch/XHR cross-site,
+		// só em navegação de topo. SameSite=None exige Secure=true.
+		SameSite: http.SameSiteNoneMode,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 	})
 	return nil
@@ -114,7 +118,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  time.Unix(0, 0),
 	})
 	w.WriteHeader(http.StatusNoContent)
