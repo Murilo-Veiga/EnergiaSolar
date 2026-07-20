@@ -1,62 +1,4 @@
 services:
-  influxdb:
-    image: influxdb:2.7
-    container_name: solar-home-influxdb
-    restart: unless-stopped
-    ports:
-      - "8086:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
-    volumes:
-      - influxdb-data:/var/lib/influxdb2
-
-  collector:
-    build: ./collector
-    container_name: solar-home-collector
-    restart: unless-stopped
-    environment:
-      HUAWEI_ENABLED: ${HUAWEI_ENABLED:-true}
-      HUAWEI_USERNAME: ${HUAWEI_USERNAME}
-      HUAWEI_SYSTEM_CODE: ${HUAWEI_SYSTEM_CODE}
-      HUAWEI_BASE_URL: ${HUAWEI_BASE_URL:-https://la5.fusionsolar.huawei.com}
-      FOXESS_ENABLED: ${FOXESS_ENABLED:-true}
-      FOXESS_API_KEY: ${FOXESS_API_KEY}
-      FOXESS_BASE_URL: ${FOXESS_BASE_URL:-https://www.foxesscloud.com}
-      PLANT_INSTALLED_POWER_KWP: ${PLANT_INSTALLED_POWER_KWP:-12.2}
-      INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
-      INFLUXDB_ORG: ${INFLUXDB_ORG}
-      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
-      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-300}
-    depends_on:
-      - influxdb
-
-  webapp:
-    build: ./webapp
-    container_name: solar-home-webapp
-    restart: unless-stopped
-    ports:
-      - "8080:8000"
-    environment:
-      HUAWEI_ENABLED: ${HUAWEI_ENABLED:-true}
-      FOXESS_ENABLED: ${FOXESS_ENABLED:-true}
-      PLANT_LAT: ${PLANT_LAT}
-      PLANT_LON: ${PLANT_LON}
-      INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
-      INFLUXDB_ORG: ${INFLUXDB_ORG}
-      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
-    depends_on:
-      - influxdb
-
-  # --- Stack novo (Go + Postgres + React), rodando ao lado do stack Python
-  # + InfluxDB acima até atingir paridade validada — ver plano em
-  # /home/marcos/.claude/plans/polymorphic-humming-fog.md ---
   postgres:
     image: postgres:16-alpine
     container_name: solar-home-postgres
@@ -80,26 +22,9 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-solarhome}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-solarhome}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET}
       CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
-      # Só usados pelo comando "seed" (docker compose run --entrypoint seed api-go)
-      SEED_USER_EMAIL: ${SEED_USER_EMAIL}
-      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD}
-      HUAWEI_ENABLED: ${HUAWEI_ENABLED:-true}
-      HUAWEI_USERNAME: ${HUAWEI_USERNAME}
-      HUAWEI_SYSTEM_CODE: ${HUAWEI_SYSTEM_CODE}
-      HUAWEI_BASE_URL: ${HUAWEI_BASE_URL:-https://la5.fusionsolar.huawei.com}
-      PLANT_LAT: ${PLANT_LAT}
-      PLANT_LON: ${PLANT_LON}
-      PLANT_INSTALLED_POWER_KWP: ${PLANT_INSTALLED_POWER_KWP}
-      # Só usados pelo comando "migrate-influx" (docker compose run --entrypoint migrate-influx api-go)
-      INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
-      INFLUXDB_ORG: ${INFLUXDB_ORG}
-      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
-      TARGET_PLANT_ID: ${TARGET_PLANT_ID}
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:3000}
     depends_on:
       - postgres
-      - influxdb
 
   collector-go:
     build: ./api-go
@@ -125,5 +50,4 @@ services:
       - api-go
 
 volumes:
-  influxdb-data:
   postgres-data:

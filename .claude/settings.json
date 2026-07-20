@@ -9,7 +9,8 @@
       "Skill(run:*)",
       "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' http://localhost:5173 --max-time 3)",
       "Bash(curl -s -i -X OPTIONS http://localhost:8090/api/admin/users -H \"Origin: http://localhost:5173\" -H \"Access-Control-Request-Method: GET\")",
-      "Bash(curl -s http://localhost:5173/src/pages/Administracao.tsx)"
+      "Bash(curl -s http://localhost:5173/src/pages/Administracao.tsx)",
+      "Bash(docker compose *)"
     ]
   }
 }

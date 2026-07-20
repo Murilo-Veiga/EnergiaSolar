@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Solar Home — APIs do projeto",
-    "description": "Coleção com as APIs realmente usadas no projeto EnergiaSolar: Huawei FusionSolar NBI, FoxESS Cloud OpenAPI, Open-Meteo e o webapp local (FastAPI). Gerada a partir do código em collector/huawei_client.py, collector/foxess_client.py e webapp/main.py — não da doc oficial (a doc da Huawei é uma SPA que não expõe conteúdo estático).\n\nUse o environment 'Solar Home' junto com esta collection e preencha as variáveis marcadas como secretas antes de rodar.",
+    "description": "Coleção com as APIs de terceiro usadas no projeto EnergiaSolar: Huawei FusionSolar NBI, FoxESS Cloud OpenAPI e Open-Meteo. Gerada a partir do código em collector/huawei_client.py e collector/foxess_client.py — não da doc oficial (a doc da Huawei é uma SPA que não expõe conteúdo estático).\n\nOs endpoints do backend do projeto (api-go) estão na collection \"EnergiaSolar API (Go)\", em arquivo separado — o webapp Python legado que existia aqui foi removido.\n\nUse o environment 'Solar Home' junto com esta collection e preencha as variáveis marcadas como secretas antes de rodar.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -14,7 +14,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -22,8 +25,13 @@
             },
             "url": {
               "raw": "{{huawei_base_url}}/thirdData/login",
-              "host": ["{{huawei_base_url}}"],
-              "path": ["thirdData", "login"]
+              "host": [
+                "{{huawei_base_url}}"
+              ],
+              "path": [
+                "thirdData",
+                "login"
+              ]
             },
             "description": "Sem rate limit. Resposta: {success: bool}. O xsrf-token vem no HEADER da resposta, não no corpo — capturado pelo script de teste abaixo."
           },
@@ -53,8 +61,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "XSRF-TOKEN", "value": "{{huawei_xsrf_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "XSRF-TOKEN",
+                "value": "{{huawei_xsrf_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -62,8 +76,13 @@
             },
             "url": {
               "raw": "{{huawei_base_url}}/thirdData/getStationList",
-              "host": ["{{huawei_base_url}}"],
-              "path": ["thirdData", "getStationList"]
+              "host": [
+                "{{huawei_base_url}}"
+              ],
+              "path": [
+                "thirdData",
+                "getStationList"
+              ]
             },
             "description": "Lista as usinas (stations) da conta. Retorna stationCode, usado nas demais chamadas."
           },
@@ -88,8 +107,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "XSRF-TOKEN", "value": "{{huawei_xsrf_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "XSRF-TOKEN",
+                "value": "{{huawei_xsrf_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -97,8 +122,13 @@
             },
             "url": {
               "raw": "{{huawei_base_url}}/thirdData/getDevList",
-              "host": ["{{huawei_base_url}}"],
-              "path": ["thirdData", "getDevList"]
+              "host": [
+                "{{huawei_base_url}}"
+              ],
+              "path": [
+                "thirdData",
+                "getDevList"
+              ]
             },
             "description": "Lista os dispositivos (inversores) da usina. Retorna devDn, usado em getDevRealKpi."
           },
@@ -123,8 +153,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "XSRF-TOKEN", "value": "{{huawei_xsrf_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "XSRF-TOKEN",
+                "value": "{{huawei_xsrf_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -132,8 +168,13 @@
             },
             "url": {
               "raw": "{{huawei_base_url}}/thirdData/getStationRealKpi",
-              "host": ["{{huawei_base_url}}"],
-              "path": ["thirdData", "getStationRealKpi"]
+              "host": [
+                "{{huawei_base_url}}"
+              ],
+              "path": [
+                "thirdData",
+                "getStationRealKpi"
+              ]
             },
             "description": "KPI em tempo real da usina (dataItemMap.day_power usado como fallback de geração do dia no coletor). Rate limit: 1x/300s."
           }
@@ -143,8 +184,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "XSRF-TOKEN", "value": "{{huawei_xsrf_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "XSRF-TOKEN",
+                "value": "{{huawei_xsrf_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -152,8 +199,13 @@
             },
             "url": {
               "raw": "{{huawei_base_url}}/thirdData/getDevRealKpi",
-              "host": ["{{huawei_base_url}}"],
-              "path": ["thirdData", "getDevRealKpi"]
+              "host": [
+                "{{huawei_base_url}}"
+              ],
+              "path": [
+                "thirdData",
+                "getDevRealKpi"
+              ]
             },
             "description": "KPI em tempo real do inversor. devTypeId=38 = inversor (fixo na taxonomia da NBI). Campos usados: dataItemMap.active_power (potência), day_cap (geração do dia), temperature. Rate limit: 1x/300s."
           }
@@ -163,8 +215,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "XSRF-TOKEN", "value": "{{huawei_xsrf_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "XSRF-TOKEN",
+                "value": "{{huawei_xsrf_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -172,8 +230,13 @@
             },
             "url": {
               "raw": "{{huawei_base_url}}/thirdData/getAlarmList",
-              "host": ["{{huawei_base_url}}"],
-              "path": ["thirdData", "getAlarmList"]
+              "host": [
+                "{{huawei_base_url}}"
+              ],
+              "path": [
+                "thirdData",
+                "getAlarmList"
+              ]
             },
             "description": "Lista de alarmes ativos da usina. ATENCAO: rate limit próprio, medido empiricamente entre ~592s e ~888s — bem mais restrito que os outros endpoints (300s). Chamar com menos intervalo retorna failCode 407 ACCESS_FREQUENCY_IS_TOO_HIGH."
           }
@@ -218,11 +281,26 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "token", "value": "{{foxess_api_key}}" },
-              { "key": "timestamp", "value": "{{foxess_timestamp}}" },
-              { "key": "signature", "value": "{{foxess_signature}}" },
-              { "key": "lang", "value": "en" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{foxess_api_key}}"
+              },
+              {
+                "key": "timestamp",
+                "value": "{{foxess_timestamp}}"
+              },
+              {
+                "key": "signature",
+                "value": "{{foxess_signature}}"
+              },
+              {
+                "key": "lang",
+                "value": "en"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -230,8 +308,15 @@
             },
             "url": {
               "raw": "{{foxess_base_url}}/op/v0/device/list",
-              "host": ["{{foxess_base_url}}"],
-              "path": ["op", "v0", "device", "list"]
+              "host": [
+                "{{foxess_base_url}}"
+              ],
+              "path": [
+                "op",
+                "v0",
+                "device",
+                "list"
+              ]
             },
             "description": "Descobre o deviceSN do inversor. Resposta em result.data[]."
           }
@@ -257,11 +342,26 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "token", "value": "{{foxess_api_key}}" },
-              { "key": "timestamp", "value": "{{foxess_timestamp}}" },
-              { "key": "signature", "value": "{{foxess_signature}}" },
-              { "key": "lang", "value": "en" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{foxess_api_key}}"
+              },
+              {
+                "key": "timestamp",
+                "value": "{{foxess_timestamp}}"
+              },
+              {
+                "key": "signature",
+                "value": "{{foxess_signature}}"
+              },
+              {
+                "key": "lang",
+                "value": "en"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -269,8 +369,16 @@
             },
             "url": {
               "raw": "{{foxess_base_url}}/op/v0/device/real/query",
-              "host": ["{{foxess_base_url}}"],
-              "path": ["op", "v0", "device", "real", "query"]
+              "host": [
+                "{{foxess_base_url}}"
+              ],
+              "path": [
+                "op",
+                "v0",
+                "device",
+                "real",
+                "query"
+              ]
             },
             "description": "Potência/geração/temperatura instantâneas. Variáveis usadas pelo coletor: generationPower, todayYield, invTemperation."
           }
@@ -298,11 +406,26 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "token", "value": "{{foxess_api_key}}" },
-              { "key": "timestamp", "value": "{{foxess_timestamp}}" },
-              { "key": "signature", "value": "{{foxess_signature}}" },
-              { "key": "lang", "value": "en" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{foxess_api_key}}"
+              },
+              {
+                "key": "timestamp",
+                "value": "{{foxess_timestamp}}"
+              },
+              {
+                "key": "signature",
+                "value": "{{foxess_signature}}"
+              },
+              {
+                "key": "lang",
+                "value": "en"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -310,8 +433,16 @@
             },
             "url": {
               "raw": "{{foxess_base_url}}/op/v0/device/history/query",
-              "host": ["{{foxess_base_url}}"],
-              "path": ["op", "v0", "device", "history", "query"]
+              "host": [
+                "{{foxess_base_url}}"
+              ],
+              "path": [
+                "op",
+                "v0",
+                "device",
+                "history",
+                "query"
+              ]
             },
             "description": "Curva histórica de até 24h, usada pelo coletor para a curva intradiária (janela de 3h a cada ciclo de 5min, com sobreposição — ver README)."
           }
@@ -329,182 +460,43 @@
             "url": {
               "raw": "https://api.open-meteo.com/v1/forecast?latitude={{plant_lat}}&longitude={{plant_lon}}&daily=weathercode,temperature_2m_max,temperature_2m_min,shortwave_radiation_sum,precipitation_sum,precipitation_probability_max,sunrise,sunset&hourly=weathercode,cloudcover&timezone=America/Sao_Paulo&forecast_days=5",
               "protocol": "https",
-              "host": ["api", "open-meteo", "com"],
-              "path": ["v1", "forecast"],
+              "host": [
+                "api",
+                "open-meteo",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "forecast"
+              ],
               "query": [
-                { "key": "latitude", "value": "{{plant_lat}}" },
-                { "key": "longitude", "value": "{{plant_lon}}" },
-                { "key": "daily", "value": "weathercode,temperature_2m_max,temperature_2m_min,shortwave_radiation_sum,precipitation_sum,precipitation_probability_max,sunrise,sunset" },
-                { "key": "hourly", "value": "weathercode,cloudcover" },
-                { "key": "timezone", "value": "America/Sao_Paulo" },
-                { "key": "forecast_days", "value": "5" }
+                {
+                  "key": "latitude",
+                  "value": "{{plant_lat}}"
+                },
+                {
+                  "key": "longitude",
+                  "value": "{{plant_lon}}"
+                },
+                {
+                  "key": "daily",
+                  "value": "weathercode,temperature_2m_max,temperature_2m_min,shortwave_radiation_sum,precipitation_sum,precipitation_probability_max,sunrise,sunset"
+                },
+                {
+                  "key": "hourly",
+                  "value": "weathercode,cloudcover"
+                },
+                {
+                  "key": "timezone",
+                  "value": "America/Sao_Paulo"
+                },
+                {
+                  "key": "forecast_days",
+                  "value": "5"
+                }
               ]
             },
             "description": "Parâmetros exatamente iguais aos usados por webapp/main.py::_forecast_days()."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Webapp (local)",
-      "description": "Endpoints do próprio dashboard (FastAPI, webapp/main.py). Rodando via docker compose em {{webapp_base_url}} (padrão http://localhost:8080).",
-      "item": [
-        {
-          "name": "Dashboard (HTML)",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/", "host": ["{{webapp_base_url}}"], "path": [""] }
-          }
-        },
-        {
-          "name": "GET /api/summary",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/api/summary", "host": ["{{webapp_base_url}}"], "path": ["api", "summary"] },
-            "description": "KPIs atuais: potência, geração/economia do dia (+ variação % vs. ontem), pico do dia + horário, status."
-          }
-        },
-        {
-          "name": "GET /api/inverters",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/api/inverters", "host": ["{{webapp_base_url}}"], "path": ["api", "inverters"] },
-            "description": "Potência/geração/temperatura/status por inversor + consecutive_failures/last_error da coleta."
-          }
-        },
-        {
-          "name": "GET /api/day-status",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/api/day-status", "host": ["{{webapp_base_url}}"], "path": ["api", "day-status"] },
-            "description": "Clima recalculado nas horas de sol, irradiância, nuvens por hora, alarme, geração, bandeira vigente."
-          }
-        },
-        {
-          "name": "GET /api/forecast",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/api/forecast", "host": ["{{webapp_base_url}}"], "path": ["api", "forecast"] },
-            "description": "Previsão 5 dias (Open-Meteo, cache de 2h)."
-          }
-        },
-        {
-          "name": "GET /api/history?range=semana",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{webapp_base_url}}/api/history?range=semana",
-              "host": ["{{webapp_base_url}}"],
-              "path": ["api", "history"],
-              "query": [{ "key": "range", "value": "semana", "description": "dia | semana | mes | ano" }]
-            },
-            "description": "Série de geração no período + total_kwh/total_brl e previous_total_kwh/previous_total_brl."
-          }
-        },
-        {
-          "name": "GET /api/history/records",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/api/history/records", "host": ["{{webapp_base_url}}"], "path": ["api", "history", "records"] },
-            "description": "Recordes all-time: melhor dia, melhor mês, maior potência já vista."
-          }
-        },
-        {
-          "name": "GET /api/history/inverters?range=mes",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{webapp_base_url}}/api/history/inverters?range=mes",
-              "host": ["{{webapp_base_url}}"],
-              "path": ["api", "history", "inverters"],
-              "query": [{ "key": "range", "value": "mes", "description": "dia | semana | mes | ano" }]
-            },
-            "description": "Geração diária por inversor (Huawei/FoxESS)."
-          }
-        },
-        {
-          "name": "GET /api/history/report.pdf?range=mes",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{webapp_base_url}}/api/history/report.pdf?range=mes",
-              "host": ["{{webapp_base_url}}"],
-              "path": ["api", "history", "report.pdf"],
-              "query": [{ "key": "range", "value": "mes" }]
-            },
-            "description": "Relatório em PDF (reportlab) para download."
-          }
-        },
-        {
-          "name": "GET /api/collector-health?days=30",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{webapp_base_url}}/api/collector-health?days=30",
-              "host": ["{{webapp_base_url}}"],
-              "path": ["api", "collector-health"],
-              "query": [{ "key": "days", "value": "30" }]
-            },
-            "description": "% de ciclos de coleta sem falha por inversor."
-          }
-        },
-        {
-          "name": "POST /api/annotations",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"date\": \"2026-07-17\",\n  \"note\": \"Limpeza dos módulos\"\n}"
-            },
-            "url": { "raw": "{{webapp_base_url}}/api/annotations", "host": ["{{webapp_base_url}}"], "path": ["api", "annotations"] },
-            "description": "Grava 1 anotação por dia (sobrescreve se já existir)."
-          }
-        },
-        {
-          "name": "GET /api/annotations?range=mes",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{webapp_base_url}}/api/annotations?range=mes",
-              "host": ["{{webapp_base_url}}"],
-              "path": ["api", "annotations"],
-              "query": [{ "key": "range", "value": "mes" }]
-            }
-          }
-        },
-        {
-          "name": "POST /api/consumption/upload",
-          "request": {
-            "method": "POST",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "file", "type": "file", "src": [] }
-              ]
-            },
-            "url": { "raw": "{{webapp_base_url}}/api/consumption/upload", "host": ["{{webapp_base_url}}"], "path": ["api", "consumption", "upload"] },
-            "description": "Upload multipart da fatura PDF da Celesc (selecione o arquivo no campo 'file' antes de enviar). Processado em memória, nunca salvo em disco."
-          }
-        },
-        {
-          "name": "GET /api/consumption/summary",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{webapp_base_url}}/api/consumption/summary", "host": ["{{webapp_base_url}}"], "path": ["api", "consumption", "summary"] },
-            "description": "Resumo por UC (última fatura) + economia estimada."
-          }
-        },
-        {
-          "name": "GET /api/consumption/history?uc=19647901154",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{webapp_base_url}}/api/consumption/history?uc=19647901154",
-              "host": ["{{webapp_base_url}}"],
-              "path": ["api", "consumption", "history"],
-              "query": [{ "key": "uc", "value": "19647901154", "description": "19647901154 (Guanabara/usina) ou 298240601131 (Elizabeth Rech)" }]
-            }
           }
         }
       ]
