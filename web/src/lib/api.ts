@@ -60,6 +60,12 @@ export interface AdminUser {
   plants_count: number;
 }
 
+export interface SystemSettings {
+  huawei_base_url: string;
+  foxess_base_url: string;
+  worker_interval_minutes: number;
+}
+
 export interface Plant {
   id: string;
   name: string;

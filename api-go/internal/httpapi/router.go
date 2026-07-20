@@ -41,6 +41,11 @@ func NewRouter(s *Server) http.Handler {
 			r.Put("/{userID}/password", s.handleAdminResetPassword)
 			r.Delete("/{userID}", s.handleAdminDeleteUser)
 		})
+		r.Route("/api/admin/system-settings", func(r chi.Router) {
+			r.Use(s.RequireAdmin)
+			r.Get("/", s.handleGetSystemSettings)
+			r.Put("/", s.handleUpdateSystemSettings)
+		})
 		r.Get("/api/plants", s.handleListPlants)
 		r.Post("/api/plants", s.handleCreatePlant)
 		r.Route("/api/plants/{plantID}", func(r chi.Router) {

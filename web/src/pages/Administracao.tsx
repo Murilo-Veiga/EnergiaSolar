@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, type AdminUser, type InverterCredential, type Plant } from "../lib/api";
+import { api, ApiError, type AdminUser, type InverterCredential, type Plant, type SystemSettings } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 interface Props {
@@ -43,17 +43,120 @@ export function Administracao({ plants, activePlantId, onSelectPlant }: Props) {
   );
 }
 
-// Configurações que não dependem de usuário nem de usina — hoje o sistema
-// ainda não tem nenhuma (tudo é por usina: credenciais de inversor, etc.).
-// Reservado pra parâmetros globais futuros.
+// Configurações que não dependem de usuário nem de usina: URL padrão das
+// integrações Huawei/FoxESS (usada quando uma credencial não define a
+// própria) e o intervalo do worker de coleta — ver
+// api-go/internal/collector/supervisor.go, que relê essa config a cada
+// reconciliação (no máx. alguns minutos de atraso pra aplicar).
 function SistemaGlobalTab() {
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await api.get<SystemSettings>("/api/admin/system-settings");
+      setSettings(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao carregar configurações");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
   return (
     <div className="admin-section">
       <h3>Configuração do sistema</h3>
-      <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>
-        Nenhuma configuração global disponível no momento.
-      </div>
+      {error && <div className="auth-error" style={{ marginBottom: 8 }}>{error}</div>}
+      {loading ? (
+        <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Carregando...</div>
+      ) : settings ? (
+        <SystemSettingsForm settings={settings} onSaved={load} />
+      ) : null}
     </div>
+  );
+}
+
+function SystemSettingsForm({ settings, onSaved }: { settings: SystemSettings; onSaved: () => Promise<void> }) {
+  const [huaweiBaseUrl, setHuaweiBaseUrl] = useState(settings.huawei_base_url);
+  const [foxessBaseUrl, setFoxessBaseUrl] = useState(settings.foxess_base_url);
+  const [workerInterval, setWorkerInterval] = useState(settings.worker_interval_minutes.toString());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    setHuaweiBaseUrl(settings.huawei_base_url);
+    setFoxessBaseUrl(settings.foxess_base_url);
+    setWorkerInterval(settings.worker_interval_minutes.toString());
+  }, [settings]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      await api.put("/api/admin/system-settings", {
+        huawei_base_url: huaweiBaseUrl,
+        foxess_base_url: foxessBaseUrl,
+        worker_interval_minutes: Number(workerInterval) || 30,
+      });
+      setSuccess(true);
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao salvar configurações");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="admin-form">
+      <label>
+        URL base — Huawei FusionSolar
+        <input
+          value={huaweiBaseUrl}
+          onChange={(e) => setHuaweiBaseUrl(e.target.value)}
+          placeholder="https://la5.fusionsolar.huawei.com"
+        />
+      </label>
+      <label>
+        URL base — FoxESS Cloud
+        <input
+          value={foxessBaseUrl}
+          onChange={(e) => setFoxessBaseUrl(e.target.value)}
+          placeholder="https://www.foxesscloud.com"
+        />
+      </label>
+      <label>
+        Intervalo do worker de coleta (minutos)
+        <input
+          type="number"
+          min={1}
+          max={1440}
+          value={workerInterval}
+          onChange={(e) => setWorkerInterval(e.target.value)}
+          required
+        />
+      </label>
+      <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className="btn" type="submit" disabled={submitting}>
+          Salvar
+        </button>
+        {success && <span style={{ color: "var(--good)", fontSize: 13 }}>Configurações atualizadas.</span>}
+        {error && <span className="auth-error">{error}</span>}
+      </div>
+      <div className="admin-form-full" style={{ color: "var(--ink-muted)", fontSize: 12 }}>
+        URLs vazias usam o padrão do sistema. Credenciais de usina com URL própria continuam usando a URL delas,
+        não a global. O worker pode levar até alguns minutos pra aplicar uma mudança.
+      </div>
+    </form>
   );
 }
 
