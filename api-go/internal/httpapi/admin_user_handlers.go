@@ -12,6 +12,7 @@ import (
 
 type adminUser struct {
 	ID          string    `json:"id"`
+	Name        string    `json:"name"`
 	Email       string    `json:"email"`
 	Username    string    `json:"username"`
 	IsAdmin     bool      `json:"is_admin"`
@@ -20,6 +21,7 @@ type adminUser struct {
 }
 
 type adminCreateUserRequest struct {
+	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -27,6 +29,7 @@ type adminCreateUserRequest struct {
 }
 
 type adminUpdateUserRequest struct {
+	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
 	IsAdmin  bool   `json:"is_admin"`
@@ -39,7 +42,7 @@ type adminResetPasswordRequest struct {
 // handleAdminListUsers lista todos os usuários do sistema — só admins acessam.
 func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT u.id, u.email, COALESCE(u.username, ''), u.is_admin, u.created_at, count(p.id)
+		SELECT u.id, u.name, u.email, COALESCE(u.username, ''), u.is_admin, u.created_at, count(p.id)
 		FROM users u
 		LEFT JOIN plants p ON p.user_id = u.id
 		GROUP BY u.id
@@ -54,7 +57,7 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 	users := []adminUser{}
 	for rows.Next() {
 		var u adminUser
-		if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount); err != nil {
 			writeInternalError(w, err, "falha ao listar usuários")
 			return
 		}
@@ -83,10 +86,10 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	var u adminUser
 	err = s.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, username, password_hash, is_admin) VALUES ($1, NULLIF($2, ''), $3, $4)
-		 RETURNING id, email, COALESCE(username, ''), is_admin, created_at`,
-		req.Email, req.Username, hash, req.IsAdmin,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
+		`INSERT INTO users (name, email, username, password_hash, is_admin) VALUES ($1, $2, NULLIF($3, ''), $4, $5)
+		 RETURNING id, name, email, COALESCE(username, ''), is_admin, created_at`,
+		req.Name, req.Email, req.Username, hash, req.IsAdmin,
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
 	if err != nil {
 		if msg, ok := usernameConflictMessage(err); ok {
 			writeError(w, http.StatusConflict, msg)
@@ -104,12 +107,12 @@ func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
 
 	var u adminUser
 	err := s.DB.QueryRow(r.Context(), `
-		SELECT u.id, u.email, COALESCE(u.username, ''), u.is_admin, u.created_at, count(p.id)
+		SELECT u.id, u.name, u.email, COALESCE(u.username, ''), u.is_admin, u.created_at, count(p.id)
 		FROM users u
 		LEFT JOIN plants p ON p.user_id = u.id
 		WHERE u.id = $1
 		GROUP BY u.id
-	`, userID).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount)
+	`, userID).Scan(&u.ID, &u.Name, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &u.PlantsCount)
 	if isNoRows(err) {
 		writeError(w, http.StatusNotFound, "usuário não encontrado")
 		return
@@ -142,10 +145,10 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	var u adminUser
 	err := s.DB.QueryRow(r.Context(),
-		`UPDATE users SET email = $1, username = NULLIF($2, ''), is_admin = $3 WHERE id = $4
-		 RETURNING id, email, COALESCE(username, ''), is_admin, created_at`,
-		req.Email, req.Username, req.IsAdmin, userID,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
+		`UPDATE users SET name = $1, email = $2, username = NULLIF($3, ''), is_admin = $4 WHERE id = $5
+		 RETURNING id, name, email, COALESCE(username, ''), is_admin, created_at`,
+		req.Name, req.Email, req.Username, req.IsAdmin, userID,
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
 	if isNoRows(err) {
 		writeError(w, http.StatusNotFound, "usuário não encontrado")
 		return

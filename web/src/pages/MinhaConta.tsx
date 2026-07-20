@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type Me } from "../lib/api";
+import { IconBadge } from "../components/icons";
 
 // Tela isolada de Administração — só ajustes da própria conta (e-mail e
 // senha). Gestão de outros usuários fica em Administração > Gestão de
@@ -25,12 +26,30 @@ export function MinhaConta() {
 
   return (
     <div>
-      <div className="admin-section">
-        <h3>Conta</h3>
+      <div className="card profile-hero">
+        <IconBadge name="user" color="blue" size="lg" />
+        <div>
+          <div className="profile-hero-name">{me.name || me.email}</div>
+          <div className="profile-hero-sub">
+            {me.email}
+            {me.username && ` · @${me.username}`}
+          </div>
+        </div>
+      </div>
+
+      <div className="card panel-card">
+        <div className="panel-card-head">
+          <IconBadge name="settings" color="blue" size="card" />
+          <h3>Dados da conta</h3>
+        </div>
         <ProfileForm name={me.name} email={me.email} username={me.username} onSaved={load} />
       </div>
-      <div className="admin-section">
-        <h3>Senha</h3>
+
+      <div className="card panel-card">
+        <div className="panel-card-head">
+          <IconBadge name="shield" color="gold" size="card" />
+          <h3>Senha</h3>
+        </div>
         <PasswordForm />
       </div>
     </div>

@@ -55,6 +55,7 @@ export interface Me {
 
 export interface AdminUser {
   id: string;
+  name: string;
   email: string;
   username: string;
   is_admin: boolean;
