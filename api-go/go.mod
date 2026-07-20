@@ -1,6 +1,6 @@
 module energiasolar-api
 
-go 1.23
+go 1.24.1
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0
@@ -8,6 +8,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang-migrate/migrate/v4 v4.18.1
 	github.com/jackc/pgx/v5 v5.7.1
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	golang.org/x/crypto v0.28.0
 )
 

@@ -137,15 +137,25 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// today_economia_brl depende da tarifa efetiva da última fatura Celesc
-	// — ainda não portado (ver Fase 5 do plano, parser de fatura), então
-	// fica sempre null por enquanto, igual ao comportamento real hoje pra
-	// quem nunca enviou fatura nenhuma.
+	// today_economia_brl = geração de hoje × tarifa efetiva da última
+	// fatura Celesc — fica null até a 1a fatura ser importada (ver
+	// internal/celesc e handleUploadConsumption).
+	var todayEconomiaBRL *float64
+	tarifa, err := s.tarifaEfetiva(ctx, plantID)
+	if err != nil {
+		writeInternalError(w, err, "falha ao calcular tarifa efetiva")
+		return
+	}
+	if tarifa != nil && todayGenerated != nil {
+		economia := roundTo(*todayGenerated*(*tarifa), 2)
+		todayEconomiaBRL = &economia
+	}
+
 	writeJSON(w, http.StatusOK, summaryResponse{
 		InstantaneousPowerKW: instantaneous,
 		InstalledPowerKWp:    installed,
 		TodayGeneratedKWh:    todayGenerated,
-		TodayEconomiaBRL:     nil,
+		TodayEconomiaBRL:     todayEconomiaBRL,
 		TodayVsYesterdayPct:  todayVsYesterdayPct,
 		PeakPowerKW:          peakPowerKW,
 		PeakPowerAt:          peakPowerAt,

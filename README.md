@@ -238,20 +238,16 @@ Python → Go/React) e nem tudo que existia antes já foi trazido de volta.
    só medição real. Uma estimativa própria (radiação solar do Open-Meteo ×
    potência instalada × fator de performance) foi avaliada e **descartada**
    por decisão do usuário.
-2. **Economia estimada e bandeira tarifária sempre nulas**
-   (`today_economia_brl` em `/summary`, `bandeira`/`bandeira_valor_kwh` em
-   `/day-status`): dependiam da tarifa extraída da fatura da Celesc, cujo
-   upload/parser ainda não foi portado (ver "Consumo por unidade
-   consumidora" abaixo). Sem isso, a Central de Alertas nunca dispara o
-   alerta de "bandeira amarela/vermelha".
+2. ~~Economia estimada e bandeira tarifária sempre nulas~~ **Portado** — ver
+   "Consumo por unidade consumidora" abaixo. `today_economia_brl` (em
+   `/summary`), `bandeira`/`bandeira_valor_kwh` (em `/day-status`) e
+   `valor_estimado_brl`/`total_brl` (em `/history`) ficam `null` só até a
+   1ª fatura ser importada por uma usina.
 3. **Relatório em PDF do Histórico**: existia no webapp Python
    (`reportlab`), ainda não foi portado — o botão aparece desabilitado na
    aba Histórico.
-4. **Upload de fatura da Celesc / consumo por UC**: aba "Consumo" existe no
-   frontend só como placeholder ("Em breve") — o parser de PDF
-   (`pdfplumber`) e os endpoints de upload/resumo/histórico por unidade
-   consumidora ainda não foram portados. A tabela `consumer_units` já existe
-   no schema do Postgres, sem handler nenhum usando ela ainda.
+4. ~~Upload de fatura da Celesc / consumo por UC~~ **Portado** — ver
+   "Consumo por unidade consumidora" abaixo.
 5. **Capacidade por inversor, usada em "Contribuição real vs. esperada"**
    (menu Saúde da usina): ainda hardcoded no frontend
    (`INVERTER_CAPACITY_KWP` em `SaudeTab.tsx`), igual ao valor fixo que já
@@ -433,15 +429,36 @@ então vale implementar com cautela):
 
 ## Consumo por unidade consumidora (Celesc)
 
-**Ainda não portado** — ver "Limitações conhecidas" #4. No painel Python
-anterior, essa aba processava o upload manual da fatura em PDF da Celesc
-(formato DANF3E) inteiramente em memória (`pdfplumber`), extraindo UC,
-consumo, valor, bandeira tarifária e o histórico de 12-13 meses que cada
-fatura já traz. A decisão de não integrar direto com a Celesc (sem API
-oficial pra terceiros, só scraping frágil do portal do cliente) continua
-valendo — a reintegração planejada é reimplementar o mesmo fluxo de upload
-manual, agora contra o Postgres multi-tenant (a tabela `consumer_units` já
-existe no schema, associada a `plant_id`).
+Aba "Consumo" do painel: upload manual do PDF da fatura da Celesc (formato
+DANF3E), processado inteiramente em memória no `api-go`
+(`internal/celesc`, via `github.com/ledongthuc/pdf` — puro Go, sem cgo),
+extraindo UC, titular, referência, consumo (kWh), valor pago, dias
+faturados, bandeira tarifária e o quadro de histórico de ~13 meses que a
+própria fatura já traz (colunas "CON"/"GTP"). Não existe integração direta
+com a Celesc (sem API oficial pra terceiros, só scraping frágil do portal
+do cliente) — o fluxo continua sendo upload manual, de propósito.
+
+- `POST /api/plants/{id}/consumption/upload`: multipart, campo `file`
+  (PDF, máx. 10MB). Cria/atualiza a `consumer_unit` (UC descoberta no PDF —
+  usa o número novo do formato ANEEL quando a fatura já anuncia a
+  transição) e grava 1 linha em `celesc_bills` por mês: a do próprio mês de
+  referência (`source='fatura'`, com todo o detalhe) e 1 por mês do quadro
+  de histórico que ainda não existir (`source='backfill_historico'`, só
+  consumo em kWh) — reenviar a mesma fatura substitui os valores em vez de
+  duplicar (`ON CONFLICT (consumer_unit_id, referencia_ano,
+  referencia_mes)`).
+- `GET /api/plants/{id}/consumption/summary`: 1 entrada por unidade
+  consumidora da usina com a fatura mais recente, mais
+  `economia_estimada_brl` (geração acumulada da usina × tarifa efetiva).
+- `GET /api/plants/{id}/consumption/history?uc=...&months=13`: faturas de 1
+  UC, mais recente primeiro.
+- **Tarifa efetiva** = valor pago ÷ kWh da fatura mais recente entre todas
+  as UCs da usina (`tarifaEfetiva` em
+  `api-go/internal/httpapi/consumption_handlers.go`) — nenhuma fatura até
+  agora cobre um período com compensação solar, então essa tarifa ainda não
+  inclui nenhum crédito de geração. É essa tarifa que alimenta
+  `today_economia_brl`, `bandeira`/`bandeira_valor_kwh` e
+  `valor_estimado_brl`/`total_brl` (ver "Limitações conhecidas" #2).
 
 ## Princípio de design: fácil de ler pra qualquer idade
 
@@ -537,6 +554,9 @@ uma.
 | `GET /api/plants/{id}/history/records` | Recordes all-time: melhor dia, melhor mês, maior potência |
 | `GET /api/plants/{id}/history/inverters?range=X` | Geração diária por inversor |
 | `GET`/`POST /api/plants/{id}/annotations` | Lista/grava anotação do dia |
+| `POST /api/plants/{id}/consumption/upload` | Importa fatura da Celesc (PDF, multipart) |
+| `GET /api/plants/{id}/consumption/summary` | Resumo de consumo por unidade consumidora + economia estimada |
+| `GET /api/plants/{id}/consumption/history?uc=...` | Histórico de faturas de 1 unidade consumidora |
 | `GET /api/plants/{id}/day-status` | Clima do dia (recalculado nas horas de sol), irradiância, alarme |
 | `GET /api/plants/{id}/forecast` | Previsão 5 dias (Open-Meteo) |
 | `GET`/`POST /api/plants/{id}/inverters-config` | Lista/cria credencial de inversor da usina |
@@ -549,8 +569,6 @@ uma.
 
 ## Pendências / próximos passos
 
-- [ ] Portar o upload/parser de fatura da Celesc e o cálculo de economia
-      real (ver "Consumo por unidade consumidora")
 - [ ] Portar o relatório em PDF do Histórico
 - [ ] Portar a curva intradiária de alta resolução da FoxESS
       (`device/history/query`)
