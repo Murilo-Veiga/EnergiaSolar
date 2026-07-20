@@ -159,6 +159,22 @@ func (c *Client) GetDevRealKpi(ctx context.Context, devIDs string, devTypeID int
 	return asSliceOfMaps(data)
 }
 
+// GetKpiStationDay consulta o KPI diário (day_power, em kWh) de uma usina
+// — devolve 1 entrada por dia do mês CALENDÁRIO inteiro que contém
+// collectTimeMs (não só o dia pedido; a NBI v2 sempre devolve o mês
+// todo). Só usado pelo backfill histórico (cmd/backfill-history) — o
+// worker de tempo real usa getStationRealKpi/getDevRealKpi, não este.
+func (c *Client) GetKpiStationDay(ctx context.Context, stationCodes string, collectTimeMs int64) ([]map[string]any, error) {
+	data, err := c.post(ctx, "/thirdData/getKpiStationDay", map[string]any{
+		"stationCodes": stationCodes,
+		"collectTime":  collectTimeMs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return asSliceOfMaps(data)
+}
+
 func (c *Client) GetAlarmList(ctx context.Context, stationCodes string) ([]map[string]any, error) {
 	data, err := c.post(ctx, "/thirdData/getAlarmList", map[string]any{"stationCodes": stationCodes})
 	if err != nil {

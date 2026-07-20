@@ -11,6 +11,7 @@ gerencia as contas do sistema.
 [Contas, usinas e administração](#contas-usinas-e-administração) ·
 [Fontes de dados oficiais](#fontes-de-dados-oficiais) ·
 [Falhas de coleta e fallback seguro](#falhas-de-coleta-e-fallback-seguro) ·
+[Backfill de histórico](#backfill-de-histórico) ·
 [Limitações conhecidas e funcionalidades ainda não portadas](#limitações-conhecidas-e-funcionalidades-ainda-não-portadas) ·
 [Design do painel](#design-do-painel) ·
 [Aba Histórico](#aba-histórico) · [Menu Saúde da usina](#menu-saúde-da-usina) ·
@@ -75,8 +76,10 @@ editável só por admin).
 
 ## Contas, usinas e administração
 
-O painel é multi-tenant: qualquer pessoa pode se cadastrar, e cada conta só
-vê as próprias usinas (`plants.user_id`). Um usuário marcado como
+O painel é multi-tenant: não existe cadastro público (a tela de "criar
+conta" foi removida de propósito) — um admin cria cada conta em
+Administração > Gestão de usuários, e cada conta só vê as próprias usinas
+(`plants.user_id`). Um usuário marcado como
 administrador (`users.is_admin`) ganha acesso a duas telas extras em
 Administração:
 
@@ -169,6 +172,59 @@ falha numa usina nunca afeta outra usina. Duas proteções:
   `collector_health` (`consecutive_failures`, `last_error`) — sucesso zera
   o contador, falha incrementa. A partir de 2 falhas seguidas, o painel
   mostra alerta na Central de Alertas (ver "Status por inversor").
+
+## Backfill de histórico
+
+O worker de tempo real (`collector`) só grava o ponto do momento em que
+roda — se uma usina/credencial começou a ser monitorada pelo painel depois
+da data real de comissionamento (ou o `collector` ficou fora do ar/mal
+configurado por um tempo), os dias anteriores ficam com buraco em
+`inverter_status`/`daily_generation`, e o gráfico "Histórico > mês"/"ano"
+mostra dias faltando ou zerados.
+
+`api-go/cmd/backfill-history` é um comando avulso (não roda em nenhum
+container do `docker-compose.yml`, é sob demanda) que busca a geração
+diária retroativa direto na API de cada fabricante e preenche esse buraco:
+
+- **Huawei**: `getKpiStationDay` — 1 chamada já devolve o **mês
+  calendário inteiro** que contém a data pedida (até 2 chamadas se o
+  intervalo pedido cruzar 2 meses). Campo usado: `PVYield` (kWh do dia) —
+  **diferente** do campo que o worker de tempo real usa (`day_power`, que
+  não existe nesse endpoint histórico; confirmado testando contra uma
+  resposta real, não documentação).
+- **FoxESS**: não existe endpoint de relatório diário pronto na OpenAPI
+  pública, então usamos a curva intradiária (`device/history/query`, até
+  24h por chamada) e pegamos o último ponto de `todayYield` do dia — 1
+  chamada por dia, com uma pequena pausa entre chamadas pra não estourar
+  rate limit.
+
+Só cobre o **passado** (nunca "hoje" — isso o worker de tempo real já
+cobre) e é idempotente: rodar de novo pro mesmo período substitui os
+valores em vez de duplicar.
+
+```bash
+cd api-go
+
+# 1. Sempre rode em dry-run primeiro (não grava nada, só imprime a tabela)
+#    e confira os valores contra o app FusionSolar/FoxESS Cloud.
+go run ./cmd/backfill-history -days 30
+
+# 2. Confirmado que os valores batem, grava de verdade.
+go run ./cmd/backfill-history -days 30 -write
+
+# Só 1 usina:
+go run ./cmd/backfill-history -days 30 -plant <plant_id> -write
+
+# Diagnóstico: imprime a resposta CRUA de getKpiStationDay pra 1
+# credencial Huawei, sem tentar extrair nenhum campo — útil se a Huawei
+# mudar o formato de resposta de novo e os valores voltarem a sair 0.
+go run ./cmd/backfill-history -debug-huawei <credential_id>
+```
+
+Precisa das mesmas variáveis de ambiente do `collector`/`api`
+(`DATABASE_URL`, `CONFIG_ENCRYPTION_KEY`) — rodando fora de container,
+exporte as do `.env` antes, ou aponte `DATABASE_URL` pro Postgres exposto
+em `localhost:5432`.
 
 ## Limitações conhecidas e funcionalidades ainda não portadas
 
@@ -361,8 +417,11 @@ exatamente na área que já causou um incidente de rate limit no passado,
 então vale implementar com cautela):
 
 - **Eficiência da geração** (Performance Ratio) e **impacto ambiental**
-  (CO₂/carvão/árvores): precisam de `getKpiStationDay`/`Month`/`Year` da
-  Huawei, endpoints nunca chamados pelo coletor até hoje.
+  (CO₂/carvão/árvores): a resposta de `getKpiStationDay` já traz
+  `perpower_ratio`/`reduction_total_co2`/`_coal`/`_tree` (confirmado — ver
+  "Backfill de histórico"), mas só é chamado pelo `cmd/backfill-history`
+  avulso; o worker de tempo real (`collector`) ainda não expõe isso no dia
+  a dia do Dashboard.
 - **Radiação medida vs. geração**: mesma dependência do item acima.
 - **Comparativo ano a ano**: sem dado real possível enquanto uma usina não
   completar 1 ano de operação.
@@ -434,7 +493,8 @@ Mecanismo em `web/src/components/NewBadge.tsx`:
 ├── api-go/
 │   ├── cmd/
 │   │   ├── api/                # entrypoint HTTP (porta 8000 no container)
-│   │   └── collector/           # entrypoint do worker de coleta
+│   │   ├── collector/           # entrypoint do worker de coleta
+│   │   └── backfill-history/    # comando avulso de backfill (ver seção acima)
 │   ├── internal/
 │   │   ├── httpapi/             # handlers + router (chi)
 │   │   ├── collector/            # supervisor + workers por credencial
@@ -463,7 +523,7 @@ uma.
 
 | Rota | Retorna |
 |---|---|
-| `POST /api/auth/signup` `login` `logout` | Cadastro/login/logout |
+| `POST /api/auth/login` `logout` | Login/logout (sem cadastro público — contas só via admin) |
 | `GET`/`PUT /api/me`, `PUT /api/me/password` | Perfil e senha da própria conta |
 | `GET /api/plants`, `POST /api/plants` | Lista/cria usinas do usuário logado |
 | `GET`/`PUT`/`DELETE /api/plants/{id}` | Consulta/edita/apaga uma usina |
@@ -499,8 +559,10 @@ uma.
       ilustrativo) contra a doc oficial do modelo exato do inversor de
       cada instalação
 - [ ] Estender "Saúde da usina" com Performance Ratio, real vs. teórico,
-      radiação e impacto ambiental — precisa de `getKpiStationDay`/
-      `Month`/`Year` da Huawei, endpoints novos
+      radiação e impacto ambiental — `getKpiStationDay` já foi implementado
+      (`internal/huawei/client.go`, usado hoje só pelo `cmd/backfill-history`);
+      falta ligar isso no worker/dashboard e, se precisar de granularidade
+      mensal/anual, implementar `getKpiStationMonth`/`Year`
 - [ ] Diagnóstico por string — FoxESS precisa de variáveis novas
       (`pv1Volt`/`pv2Volt`); Huawei já tem tudo em `getDevRealKpi`, só
       falta gravar/expor

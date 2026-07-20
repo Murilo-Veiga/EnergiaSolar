@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "green" | "aqua"; newKey?: string; adminOnly?: boolean }[] = [
   { tab: "dashboard", label: "Dashboard", icon: "layoutGrid", color: "blue" },
   { tab: "historico", label: "Histórico", icon: "trendingUp", color: "blue" },
-  { tab: "saude", label: "Saúde da usina", icon: "activity", color: "green", newKey: "nav-saude" },
+  { tab: "saude", label: "Saúde", icon: "activity", color: "green" },
   { tab: "consumo", label: "Consumo", icon: "wallet", color: "aqua" },
   { tab: "minhas-usinas", label: "Minhas usinas", icon: "sun", color: "green" },
   { tab: "administracao", label: "Administração", icon: "settings", color: "blue", adminOnly: true },
