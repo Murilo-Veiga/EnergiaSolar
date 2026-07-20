@@ -427,7 +427,7 @@
             "description": "Captura o id em {{plant_id}} — usado por todas as rotas abaixo de /api/plants/:plantID/*.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Usina de teste\",\n  \"lat\": -26.356268,\n  \"lon\": -48.807868,\n  \"installed_power_kwp\": 6.45\n}"
+              "raw": "{\n  \"name\": \"Usina de teste\",\n  \"lat\": -23.55052,\n  \"lon\": -46.633308,\n  \"installed_power_kwp\": 6.45\n}"
             }
           },
           "event": [
@@ -486,7 +486,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Usina de teste\",\n  \"lat\": -26.356268,\n  \"lon\": -48.807868,\n  \"installed_power_kwp\": 6.45\n}"
+              "raw": "{\n  \"name\": \"Usina de teste\",\n  \"lat\": -23.55052,\n  \"lon\": -46.633308,\n  \"installed_power_kwp\": 6.45\n}"
             }
           }
         },
@@ -560,7 +560,7 @@
             "description": "Não grava nada — só valida login + getStationList. base_url vazio usa o padrão global (Admin > Configuração do sistema).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"brand\": \"huawei\",\n  \"username\": \"MARCOS_ENDLER\",\n  \"system_code\": \"solturi123\",\n  \"base_url\": \"\"\n}"
+              "raw": "{\n  \"brand\": \"huawei\",\n  \"username\": \"SEU_USUARIO_HUAWEI\",\n  \"system_code\": \"SEU_SYSTEM_CODE\",\n  \"base_url\": \"\"\n}"
             }
           }
         },
@@ -618,7 +618,7 @@
             "description": "1 credencial por marca por usina (UNIQUE plant_id+brand) — repetir dá 409, use PUT pra atualizar.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"brand\": \"huawei\",\n  \"username\": \"MARCOS_ENDLER\",\n  \"system_code\": \"solturi123\"\n}"
+              "raw": "{\n  \"brand\": \"huawei\",\n  \"username\": \"SEU_USUARIO_HUAWEI\",\n  \"system_code\": \"SEU_SYSTEM_CODE\"\n}"
             }
           },
           "event": [
