@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: solar-home-postgres
+    container_name: solar-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-solarhome}
@@ -12,9 +12,9 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
-  api-go:
+  api:
     build: ./api-go
-    container_name: solar-home-api-go
+    container_name: solar-api
     restart: unless-stopped
     ports:
       - "8090:8000"
@@ -26,9 +26,9 @@ services:
     depends_on:
       - postgres
 
-  collector-go:
+  collector:
     build: ./api-go
-    container_name: solar-home-collector-go
+    container_name: solar-collector
     restart: unless-stopped
     entrypoint: collector
     environment:
@@ -37,17 +37,17 @@ services:
     depends_on:
       - postgres
 
-  web-react:
+  web:
     build:
       context: ./web
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8090}
-    container_name: solar-home-web-react
+    container_name: solar-web
     restart: unless-stopped
     ports:
       - "3000:8000"
     depends_on:
-      - api-go
+      - api
 
 volumes:
   postgres-data:

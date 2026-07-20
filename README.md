@@ -25,28 +25,31 @@ gerencia as contas do sistema.
 
 ```
 Huawei FusionSolar (NBI)  ─┐
-                            ├─→  collector-go  →  Postgres  ←→  api-go  ←→  web-react
-FoxESS Cloud (OpenAPI)   ──┘                          ↑
-                                        Open-Meteo (previsão) — chamada por api-go
+                            ├─→  collector  →  Postgres  ←→  api  ←→  web
+FoxESS Cloud (OpenAPI)   ──┘                       ↑
+                                     Open-Meteo (previsão) — chamada por api
 ```
 
-- **collector-go**: processo Go de longa duração (`api-go/cmd/collector`,
-  container `collector-go`), 1 goroutine por credencial de inversor
-  habilitada. Um supervisor (`internal/collector/supervisor.go`) relê a
-  cada 2 min quais credenciais estão habilitadas e a configuração global
-  (`system_settings`), sobe/derruba workers sem precisar reiniciar o
-  processo. Cada worker consulta a API da Huawei ou da FoxESS no intervalo
-  configurado (padrão 30 min, ajustável pela UI de admin) e grava potência,
-  geração do dia e temperatura no Postgres — falha de um inversor nunca
-  afeta o outro.
-- **Postgres**: banco relacional único para tudo — usuários, usinas,
-  credenciais de inversor (cifradas em repouso), série temporal de
-  potência/geração, saúde da coleta e anotações. Substituiu o InfluxDB.
-- **api-go**: API JSON (chi router), autenticação por cookie de sessão
-  (JWT), multi-tenant — toda rota de usina é validada contra o dono
+- **collector** (serviço `collector`, container `solar-collector`, código em
+  `api-go/cmd/collector`): processo Go de longa duração, 1 goroutine por
+  credencial de inversor habilitada. Um supervisor
+  (`internal/collector/supervisor.go`) relê a cada 2 min quais credenciais
+  estão habilitadas e a configuração global (`system_settings`), sobe/derruba
+  workers sem precisar reiniciar o processo. Cada worker consulta a API da
+  Huawei ou da FoxESS no intervalo configurado (padrão 30 min, ajustável pela
+  UI de admin) e grava potência, geração do dia e temperatura no Postgres —
+  falha de um inversor nunca afeta o outro.
+- **Postgres** (serviço `postgres`, container `solar-postgres`): banco
+  relacional único para tudo — usuários, usinas, credenciais de inversor
+  (cifradas em repouso), série temporal de potência/geração, saúde da coleta
+  e anotações. Substituiu o InfluxDB.
+- **api** (serviço `api`, container `solar-api`, código em `api-go/cmd/api`):
+  API JSON (chi router), autenticação por cookie de sessão (JWT),
+  multi-tenant — toda rota de usina é validada contra o dono
   (`authorizePlant`), nunca vaza dado de uma usina de outro usuário.
-- **web-react**: frontend React (Vite), consome a api-go via fetch,
-  servido como estático por nginx em produção.
+- **web** (serviço `web`, container `solar-web`, código em `web/`): frontend
+  React (Vite), consome a api via fetch, servido como estático por nginx em
+  produção.
 
 ## Como rodar
 
@@ -83,8 +86,8 @@ Administração:
 - **Configuração do sistema**: parâmetros globais que não dependem de
   usuário nem de usina — hoje, a URL padrão das integrações Huawei/FoxESS
   (usada quando uma credencial de usina não define a própria) e o
-  intervalo do worker de coleta. `collector-go` relê essa tabela a cada
-  reconciliação (2 min).
+  intervalo do worker de coleta. O serviço `collector` relê essa tabela a
+  cada reconciliação (2 min).
 
 Ajustes da própria conta (nome, e-mail, senha) ficam numa tela separada,
 "Minha conta", acessível a qualquer usuário logado — não depende de ser
@@ -424,7 +427,7 @@ Mecanismo em `web/src/components/NewBadge.tsx`:
 ```
 .
 ├── .env / .env.example        # credenciais (gitignored) / template
-├── docker-compose.yml         # postgres + api-go + collector-go + web-react
+├── docker-compose.yml         # serviços: postgres, api, collector, web
 ├── postman/                   # collections Postman (api-go + integrações de terceiro)
 ├── docs/                      # doc oficial de referência (Huawei NBI, PDF)
 ├── api-go/
