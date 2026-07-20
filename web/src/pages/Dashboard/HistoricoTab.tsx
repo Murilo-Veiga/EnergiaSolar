@@ -110,7 +110,7 @@ export function HistoricoTab() {
         style={{ padding: "16px 20px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}
       >
         <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-muted)", maxWidth: "60ch", lineHeight: 1.6 }}>
-          O que sua usina já registrou: quanto gerou, quanto isso valeu em dinheiro, e seus melhores resultados — sempre no período
+          O que sua instalação já registrou: quanto gerou, quanto isso valeu em dinheiro, e seus melhores resultados — sempre no período
           escolhido ao lado.
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -134,7 +134,7 @@ export function HistoricoTab() {
       <Collapsible
         icon="sun"
         iconColor="blue"
-        title="Quanto sua usina gerou"
+        title="Quanto sua instalação gerou"
         tooltip="Mostra a energia produzida no período escolhido, dia a dia, e se está gerando mais ou menos do que no período anterior."
         defaultOpen
       >
@@ -161,7 +161,7 @@ export function HistoricoTab() {
         icon="wallet"
         iconColor="aqua"
         title="Quanto você economizou"
-        tooltip="Estima quanto você deixou de pagar pra Celesc com a energia que a usina gerou, usando a tarifa da sua fatura mais recente."
+        tooltip="Estima quanto você deixou de pagar pra Celesc com a energia que a instalação gerou, usando a tarifa da sua fatura mais recente."
       >
         <div style={{ marginBottom: 14 }}>
           <div className="chart-total-value" style={{ textAlign: "left" }}>
@@ -183,7 +183,7 @@ export function HistoricoTab() {
         icon="star"
         iconColor="gold"
         title="Seus melhores dias e meses"
-        tooltip="Guarda os recordes de geração e potência já alcançados, pra você ter um parâmetro de comparação no futuro. Independe do período selecionado acima — é sempre desde que a usina ligou."
+        tooltip="Guarda os recordes de geração e potência já alcançados, pra você ter um parâmetro de comparação no futuro. Independe do período selecionado acima — é sempre desde que a instalação ligou."
       >
         <div className="day-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
           <div>
@@ -211,7 +211,7 @@ export function HistoricoTab() {
         icon="trendingUp"
         iconColor="gold"
         title="Sequência de dias acima da média"
-        tooltip="Quantos dias seguidos a usina vem gerando acima da média do período — e o melhor/pior dia de dentro desse mesmo período."
+        tooltip="Quantos dias seguidos a instalação vem gerando acima da média do período — e o melhor/pior dia de dentro desse mesmo período."
         newKey="hist-streak"
       >
         <div className="hero-line">

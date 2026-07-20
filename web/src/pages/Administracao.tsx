@@ -1,49 +1,38 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, type AdminUser, type InverterCredential, type Plant, type SystemSettings } from "../lib/api";
+import { api, ApiError, type AdminUser, type SystemSettings } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { Modal } from "../components/Modal";
+import { IconBadge } from "../components/icons";
 
-interface Props {
-  plants: Plant[];
-  activePlantId: string | null;
-  onSelectPlant: (id: string | null) => void;
-}
+type AdminTab = "sistema" | "usuarios";
 
-type AdminTab = "sistema" | "usinas" | "usuarios";
+export function Administracao() {
+  const [tab, setTab] = useState<AdminTab>("sistema");
 
-export function Administracao({ plants, activePlantId, onSelectPlant }: Props) {
-  const { isAdmin } = useAuth();
-  const [tab, setTab] = useState<AdminTab>("usinas");
-
-  const tabs: { key: AdminTab; label: string }[] = isAdmin
-    ? [
-        { key: "sistema", label: "Configuração do sistema" },
-        { key: "usinas", label: "Minhas usinas" },
-        { key: "usuarios", label: "Gestão de usuários" },
-      ]
-    : [{ key: "usinas", label: "Minhas usinas" }];
+  const tabs: { key: AdminTab; label: string }[] = [
+    { key: "sistema", label: "Configuração do sistema" },
+    { key: "usuarios", label: "Gestão de usuários" },
+  ];
 
   return (
     <div>
-      {tabs.length > 1 && (
-        <div className="chart-head" style={{ marginBottom: 16 }}>
-          <div className="range-toggle">
-            {tabs.map((t) => (
-              <span key={t.key} className={tab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
-                {t.label}
-              </span>
-            ))}
-          </div>
+      <div className="chart-head" style={{ marginBottom: 16 }}>
+        <div className="range-toggle">
+          {tabs.map((t) => (
+            <span key={t.key} className={tab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
+              {t.label}
+            </span>
+          ))}
         </div>
-      )}
+      </div>
 
-      {tab === "sistema" && isAdmin && <SistemaGlobalTab />}
-      {tab === "usinas" && <UsinasTab plants={plants} activePlantId={activePlantId} onSelectPlant={onSelectPlant} />}
-      {tab === "usuarios" && isAdmin && <GestaoUsuariosTab />}
+      {tab === "sistema" && <SistemaGlobalTab />}
+      {tab === "usuarios" && <GestaoUsuariosTab />}
     </div>
   );
 }
 
-// Configurações que não dependem de usuário nem de usina: URL padrão das
+// Configurações que não dependem de usuário nem de instalação: URL padrão das
 // integrações Huawei/FoxESS (usada quando uma credencial não define a
 // própria) e o intervalo do worker de coleta — ver
 // api-go/internal/collector/supervisor.go, que relê essa config a cada
@@ -70,8 +59,11 @@ function SistemaGlobalTab() {
   }, []);
 
   return (
-    <div className="admin-section">
-      <h3>Configuração do sistema</h3>
+    <div className="card panel-card">
+      <div className="panel-card-head">
+        <IconBadge name="settings" color="blue" size="card" />
+        <h3>Configuração do sistema</h3>
+      </div>
       {error && <div className="auth-error" style={{ marginBottom: 8 }}>{error}</div>}
       {loading ? (
         <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Carregando...</div>
@@ -153,50 +145,10 @@ function SystemSettingsForm({ settings, onSaved }: { settings: SystemSettings; o
         {error && <span className="auth-error">{error}</span>}
       </div>
       <div className="admin-form-full" style={{ color: "var(--ink-muted)", fontSize: 12 }}>
-        URLs vazias usam o padrão do sistema. Credenciais de usina com URL própria continuam usando a URL delas,
+        URLs vazias usam o padrão do sistema. Credenciais de instalação com URL própria continuam usando a URL delas,
         não a global. O worker pode levar até alguns minutos pra aplicar uma mudança.
       </div>
     </form>
-  );
-}
-
-function UsinasTab({ plants, activePlantId, onSelectPlant }: Props) {
-  const { refreshPlants } = useAuth();
-  const activePlant = plants.find((p) => p.id === activePlantId) ?? null;
-
-  return (
-    <div>
-      <div className="admin-section">
-        <h3>Suas usinas</h3>
-        <div className="plant-list">
-          {plants.map((p) => (
-            <div
-              key={p.id}
-              className={`plant-list-item ${p.id === activePlantId ? "active" : ""}`}
-              onClick={() => onSelectPlant(p.id)}
-            >
-              <span>{p.name}</span>
-              <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>{p.installed_power_kwp} kWp</span>
-            </div>
-          ))}
-          {plants.length === 0 && <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nenhuma usina cadastrada ainda.</div>}
-        </div>
-        <NewPlantForm onCreated={refreshPlants} />
-      </div>
-
-      {activePlant && (
-        <>
-          <div className="admin-section">
-            <h3>Dados da usina</h3>
-            <PlantForm plant={activePlant} onSaved={refreshPlants} onDeleted={() => { onSelectPlant(null); void refreshPlants(); }} />
-          </div>
-          <div className="admin-section">
-            <h3>Credenciais de inversor</h3>
-            <CredentialsManager plantId={activePlant.id} />
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
@@ -208,8 +160,11 @@ function GestaoUsuariosTab() {
   }
 
   return (
-    <div className="admin-section">
-      <h3>Gestão de usuários</h3>
+    <div className="card panel-card">
+      <div className="panel-card-head">
+        <IconBadge name="user" color="aqua" size="card" />
+        <h3>Gestão de usuários</h3>
+      </div>
       <UserManagement currentUserId={userId} />
     </div>
   );
@@ -218,7 +173,8 @@ function GestaoUsuariosTab() {
 function UserManagement({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -238,7 +194,7 @@ function UserManagement({ currentUserId }: { currentUserId: string }) {
   }, []);
 
   async function remove(user: AdminUser) {
-    if (!confirm(`Apagar o usuário "${user.email}"? Isso também remove suas usinas e credenciais.`)) return;
+    if (!confirm(`Apagar o usuário "${user.email}"? Isso também remove suas instalações e credenciais.`)) return;
     try {
       await api.delete(`/api/admin/users/${user.id}`);
       await load();
@@ -254,48 +210,66 @@ function UserManagement({ currentUserId }: { currentUserId: string }) {
         <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Carregando...</div>
       ) : (
         <div className="plant-list">
-          {users.map((u) =>
-            editingId === u.id ? (
-              <EditUserForm
-                key={u.id}
-                user={u}
-                isSelf={u.id === currentUserId}
-                onSaved={async () => {
-                  setEditingId(null);
-                  await load();
-                }}
-                onCancel={() => setEditingId(null)}
-              />
-            ) : (
-              <div className="plant-list-item" key={u.id} style={{ cursor: "default" }}>
-                <span>
-                  {u.email}
-                  {u.is_admin && (
-                    <span className="badge on" style={{ marginLeft: 8 }}>
-                      admin
-                    </span>
-                  )}
-                </span>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>
-                    {u.plants_count} usina{u.plants_count === 1 ? "" : "s"}
+          {users.map((u) => (
+            <div className="plant-list-item" key={u.id} style={{ cursor: "default" }}>
+              <span>
+                {u.email}
+                {u.username && (
+                  <span style={{ color: "var(--ink-muted)", fontSize: 12, marginLeft: 8 }}>@{u.username}</span>
+                )}
+                {u.is_admin && (
+                  <span className="badge on" style={{ marginLeft: 8 }}>
+                    admin
                   </span>
-                  <button className="btn btn-secondary" onClick={() => setEditingId(u.id)}>
-                    Editar
+                )}
+              </span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>
+                  {u.plants_count} instalaç{u.plants_count === 1 ? "ão" : "ões"}
+                </span>
+                <button className="btn btn-secondary" onClick={() => setEditingUser(u)}>
+                  Editar
+                </button>
+                {u.id !== currentUserId && (
+                  <button className="btn btn-danger" onClick={() => remove(u)}>
+                    Apagar
                   </button>
-                  {u.id !== currentUserId && (
-                    <button className="btn btn-danger" onClick={() => remove(u)}>
-                      Apagar
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
-            ),
-          )}
+            </div>
+          ))}
           {users.length === 0 && <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nenhum usuário cadastrado.</div>}
         </div>
       )}
-      <NewUserForm onCreated={load} />
+      <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => setCreating(true)}>
+        + Novo usuário
+      </button>
+
+      {creating && (
+        <Modal title="Novo usuário" onClose={() => setCreating(false)}>
+          <NewUserForm
+            onCreated={async () => {
+              setCreating(false);
+              await load();
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        </Modal>
+      )}
+
+      {editingUser && (
+        <Modal title="Editar usuário" onClose={() => setEditingUser(null)}>
+          <EditUserForm
+            user={editingUser}
+            isSelf={editingUser.id === currentUserId}
+            onSaved={async () => {
+              setEditingUser(null);
+              await load();
+            }}
+            onCancel={() => setEditingUser(null)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -311,7 +285,9 @@ function EditUserForm({
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
+  const [username, setUsername] = useState(user.username);
   const [isAdminFlag, setIsAdminFlag] = useState(user.is_admin);
   const [newPassword, setNewPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -322,7 +298,7 @@ function EditUserForm({
     setSubmitting(true);
     setError(null);
     try {
-      await api.put(`/api/admin/users/${user.id}`, { email, is_admin: isAdminFlag });
+      await api.put(`/api/admin/users/${user.id}`, { name, email, username, is_admin: isAdminFlag });
       if (newPassword) {
         await api.put(`/api/admin/users/${user.id}/password`, { new_password: newPassword });
       }
@@ -335,12 +311,20 @@ function EditUserForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="admin-form" style={{ marginBottom: 8 }}>
-      <label>
+    <form onSubmit={handleSubmit} className="admin-form">
+      <label className="admin-form-full">
+        Nome
+        <input value={name} onChange={(e) => setName(e.target.value)} required />
+      </label>
+      <label className="admin-form-full">
         E-mail
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       </label>
-      <label>
+      <label className="admin-form-full">
+        Nome de usuário (opcional)
+        <input value={username} onChange={(e) => setUsername(e.target.value)} />
+      </label>
+      <label className="admin-form-full">
         Nova senha (opcional)
         <input
           type="password"
@@ -350,7 +334,7 @@ function EditUserForm({
           placeholder="deixe em branco para manter"
         />
       </label>
-      <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <label className="admin-form-full" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <input
           type="checkbox"
           checked={isAdminFlag}
@@ -372,9 +356,10 @@ function EditUserForm({
   );
 }
 
-function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+function NewUserForm({ onCreated, onCancel }: { onCreated: () => Promise<void>; onCancel: () => void }) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdminFlag, setIsAdminFlag] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -385,11 +370,7 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
     setSubmitting(true);
     setError(null);
     try {
-      await api.post("/api/admin/users", { email, password, is_admin: isAdminFlag });
-      setEmail("");
-      setPassword("");
-      setIsAdminFlag(false);
-      setOpen(false);
+      await api.post("/api/admin/users", { name, email, username, password, is_admin: isAdminFlag });
       await onCreated();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao criar usuário");
@@ -398,25 +379,25 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
     }
   }
 
-  if (!open) {
-    return (
-      <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>
-        + Novo usuário
-      </button>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="admin-form" style={{ marginTop: 12 }}>
-      <label>
+    <form onSubmit={handleSubmit} className="admin-form">
+      <label className="admin-form-full">
+        Nome
+        <input value={name} onChange={(e) => setName(e.target.value)} required />
+      </label>
+      <label className="admin-form-full">
         E-mail
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       </label>
-      <label>
+      <label className="admin-form-full">
+        Nome de usuário (opcional)
+        <input value={username} onChange={(e) => setUsername(e.target.value)} />
+      </label>
+      <label className="admin-form-full">
         Senha
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
       </label>
-      <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <label className="admin-form-full" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <input type="checkbox" checked={isAdminFlag} onChange={(e) => setIsAdminFlag(e.target.checked)} />
         Administrador
       </label>
@@ -424,7 +405,7 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <button className="btn" type="submit" disabled={submitting}>
           Criar
         </button>
-        <button className="btn btn-secondary" type="button" onClick={() => setOpen(false)}>
+        <button className="btn btn-secondary" type="button" onClick={onCancel}>
           Cancelar
         </button>
         {error && <span className="auth-error">{error}</span>}
@@ -433,271 +414,3 @@ function NewUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
   );
 }
 
-function NewPlantForm({ onCreated }: { onCreated: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.post("/api/plants", { name, installed_power_kwp: 0 });
-      setName("");
-      setOpen(false);
-      await onCreated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao criar usina");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <button className="btn btn-secondary" onClick={() => setOpen(true)}>
-        + Nova usina
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-      <input
-        placeholder="Nome da usina"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-        style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 7, padding: "8px 9px", color: "var(--ink)" }}
-      />
-      <button className="btn" type="submit" disabled={submitting}>
-        Criar
-      </button>
-      <button className="btn btn-secondary" type="button" onClick={() => setOpen(false)}>
-        Cancelar
-      </button>
-      {error && <span className="auth-error">{error}</span>}
-    </form>
-  );
-}
-
-function PlantForm({ plant, onSaved, onDeleted }: { plant: Plant; onSaved: () => Promise<void>; onDeleted: () => void }) {
-  const [name, setName] = useState(plant.name);
-  const [lat, setLat] = useState(plant.lat?.toString() ?? "");
-  const [lon, setLon] = useState(plant.lon?.toString() ?? "");
-  const [installedKwp, setInstalledKwp] = useState(plant.installed_power_kwp.toString());
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setName(plant.name);
-    setLat(plant.lat?.toString() ?? "");
-    setLon(plant.lon?.toString() ?? "");
-    setInstalledKwp(plant.installed_power_kwp.toString());
-  }, [plant]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.put(`/api/plants/${plant.id}`, {
-        name,
-        lat: lat ? Number(lat) : null,
-        lon: lon ? Number(lon) : null,
-        installed_power_kwp: Number(installedKwp) || 0,
-      });
-      await onSaved();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao salvar");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!confirm(`Remover a usina "${plant.name}"? Isso apaga também as credenciais associadas.`)) return;
-    await api.delete(`/api/plants/${plant.id}`);
-    onDeleted();
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="admin-form">
-      <label>
-        Nome
-        <input value={name} onChange={(e) => setName(e.target.value)} required />
-      </label>
-      <label>
-        Potência instalada (kWp)
-        <input type="number" step="0.01" value={installedKwp} onChange={(e) => setInstalledKwp(e.target.value)} />
-      </label>
-      <label>
-        Latitude
-        <input type="number" step="0.000001" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="ex.: -26.356268" />
-      </label>
-      <label>
-        Longitude
-        <input type="number" step="0.000001" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="ex.: -48.807868" />
-      </label>
-      <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button className="btn" type="submit" disabled={submitting}>
-          Salvar
-        </button>
-        <button className="btn btn-danger" type="button" onClick={handleDelete}>
-          Remover usina
-        </button>
-        {error && <span className="auth-error">{error}</span>}
-      </div>
-    </form>
-  );
-}
-
-function CredentialsManager({ plantId }: { plantId: string }) {
-  const [credentials, setCredentials] = useState<InverterCredential[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    const list = await api.get<InverterCredential[]>(`/api/plants/${plantId}/inverters-config`);
-    setCredentials(list);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plantId]);
-
-  async function toggleEnabled(cred: InverterCredential) {
-    await api.put(`/api/plants/${plantId}/inverters-config/${cred.id}`, { enabled: !cred.enabled });
-    await load();
-  }
-
-  async function remove(cred: InverterCredential) {
-    if (!confirm(`Remover a credencial ${cred.brand}?`)) return;
-    await api.delete(`/api/plants/${plantId}/inverters-config/${cred.id}`);
-    await load();
-  }
-
-  const existingBrands = new Set(credentials.map((c) => c.brand));
-
-  return (
-    <div>
-      {loading ? (
-        <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Carregando...</div>
-      ) : (
-        credentials.map((cred) => (
-          <div className="credential-row" key={cred.id}>
-            <span style={{ textTransform: "capitalize" }}>{cred.brand}</span>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <span className={`badge ${cred.enabled ? "on" : ""}`}>{cred.enabled ? "Habilitado" : "Desabilitado"}</span>
-              <button className="btn btn-secondary" onClick={() => toggleEnabled(cred)}>
-                {cred.enabled ? "Desabilitar" : "Habilitar"}
-              </button>
-              <button className="btn btn-danger" onClick={() => remove(cred)}>
-                Remover
-              </button>
-            </div>
-          </div>
-        ))
-      )}
-
-      {!existingBrands.has("huawei") && <AddCredentialForm plantId={plantId} brand="huawei" onSaved={load} />}
-      {!existingBrands.has("foxess") && <AddCredentialForm plantId={plantId} brand="foxess" onSaved={load} />}
-    </div>
-  );
-}
-
-function AddCredentialForm({ plantId, brand, onSaved }: { plantId: string; brand: "huawei" | "foxess"; onSaved: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [username, setUsername] = useState("");
-  const [systemCode, setSystemCode] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function body() {
-    return brand === "huawei" ? { brand, username, system_code: systemCode } : { brand, api_key: apiKey };
-  }
-
-  async function handleTest() {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const result = await api.post<{ success: boolean; message: string }>(`/api/plants/${plantId}/inverters-config/test`, body());
-      setTestResult(result);
-    } catch (err) {
-      setTestResult({ success: false, message: err instanceof ApiError ? err.message : "Falha ao testar" });
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.post(`/api/plants/${plantId}/inverters-config`, body());
-      setOpen(false);
-      setUsername("");
-      setSystemCode("");
-      setApiKey("");
-      setTestResult(null);
-      await onSaved();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao salvar credencial");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>
-        + Adicionar credencial {brand}
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="admin-form" style={{ marginTop: 12 }}>
-      {brand === "huawei" ? (
-        <>
-          <label>
-            Usuário Huawei
-            <input value={username} onChange={(e) => setUsername(e.target.value)} required />
-          </label>
-          <label>
-            System code
-            <input value={systemCode} onChange={(e) => setSystemCode(e.target.value)} required />
-          </label>
-        </>
-      ) : (
-        <label className="admin-form-full">
-          API key FoxESS
-          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
-        </label>
-      )}
-      <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button className="btn btn-secondary" type="button" onClick={handleTest} disabled={testing}>
-          {testing ? "Testando..." : "Testar conexão"}
-        </button>
-        <button className="btn" type="submit" disabled={submitting}>
-          Salvar
-        </button>
-        <button className="btn btn-secondary" type="button" onClick={() => setOpen(false)}>
-          Cancelar
-        </button>
-      </div>
-      {testResult && (
-        <div className={`test-result admin-form-full ${testResult.success ? "ok" : "fail"}`}>{testResult.message}</div>
-      )}
-      {error && <div className="auth-error admin-form-full">{error}</div>}
-    </form>
-  );
-}

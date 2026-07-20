@@ -92,7 +92,7 @@ export function SaudeTab() {
     <div>
       <div className="card" style={{ padding: "16px 20px", marginBottom: 14 }}>
         <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-muted)", maxWidth: "78ch", lineHeight: 1.6 }}>
-          Isto <b style={{ color: "var(--ink-2)" }}>não é sobre quanto gerou</b> — é sobre se a usina está gerando o que
+          Isto <b style={{ color: "var(--ink-2)" }}>não é sobre quanto gerou</b> — é sobre se a instalação está gerando o que
           deveria, pra pegar um problema (sombra, sujeira, um inversor rendendo menos) cedo, antes que vire meses de perda.
         </p>
       </div>
@@ -101,7 +101,7 @@ export function SaudeTab() {
         icon="shuffle"
         iconColor="blue"
         title="Quanto cada inversor contribuiu"
-        tooltip="Compara a geração da Huawei com a da FoxESS ao longo do tempo, pra notar se um lado da usina está rendendo menos que o outro."
+        tooltip="Compara a geração da Huawei com a da FoxESS ao longo do tempo, pra notar se um lado da instalação está rendendo menos que o outro."
         defaultOpen
       >
         <div className="chart-box" style={{ height: 200 }}>
@@ -164,7 +164,7 @@ export function SaudeTab() {
         icon="shield"
         iconColor="blue"
         title="Confiabilidade da coleta de dados"
-        tooltip="De cada 100 tentativas de buscar dados nos inversores, quantas deram certo nos últimos 30 dias. Uma taxa baixa não significa que a usina parou — só que o painel teve mais dificuldade de consultar aquele inversor."
+        tooltip="De cada 100 tentativas de buscar dados nos inversores, quantas deram certo nos últimos 30 dias. Uma taxa baixa não significa que a instalação parou — só que o painel teve mais dificuldade de consultar aquele inversor."
         newKey="saude-reliability"
       >
         <div className="day-grid" style={{ gridTemplateColumns: `repeat(${brands.length || 1},1fr)` }}>
@@ -185,7 +185,7 @@ export function SaudeTab() {
       </Collapsible>
 
       <div className="card" style={{ padding: "16px 20px", marginTop: 14, fontSize: 12, color: "var(--ink-muted)", lineHeight: 1.6 }}>
-        Outras análises de saúde da usina (eficiência vs. sol do dia, radiação medida, impacto ambiental) dependem de dados
+        Outras análises de saúde da instalação (eficiência vs. sol do dia, radiação medida, impacto ambiental) dependem de dados
         novos da API da Huawei e ainda não foram implementadas.
       </div>
     </div>

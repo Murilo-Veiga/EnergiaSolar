@@ -30,6 +30,62 @@
   .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 20px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
   .brand .name { font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
   .brand .sub { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+  .sidebar-close { display: none; }
+
+  /* Botão de menu do topbar: só existe pra abrir o drawer no mobile,
+     escondido no desktop (o sidebar já fica sempre visível ali). */
+  .nav-hamburger {
+    display: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 860px) {
+    .nav-hamburger { display: inline-flex; }
+
+    /* Sidebar vira um drawer fora do fluxo — fora da tela por padrão,
+       desliza por cima do conteúdo quando .open (ver mobileOpen em
+       NavBar.tsx), com um botão "×" próprio pra fechar (o "Sair"/troca de
+       aba também fecha sozinho, ver onCloseMobile em NavBar.tsx). */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 210;
+      width: min(280px, 82vw);
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-close {
+      display: inline-flex;
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--ink-muted);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .sidebar-close:hover { color: var(--ink); background: var(--surface-2); }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+    }
+
+    .main { padding: 16px; }
+    .topbar { flex-wrap: wrap; row-gap: 8px; }
+  }
   .nav a {
     display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px;
     font-size: 13.5px; color: var(--ink-muted); text-decoration: none; margin-bottom: 2px; font-weight: 500; cursor: pointer;
@@ -43,6 +99,7 @@
   .icon-badge.size-card { width: 32px; height: 32px; border-radius: 9px; }
   .icon-badge.size-alert { width: 28px; height: 28px; }
   .icon-badge.size-fc { width: 26px; height: 26px; border-radius: 7px; }
+  .icon-badge.size-lg { width: 48px; height: 48px; border-radius: 14px; }
   .icon-badge.blue  { background: rgba(57,135,229,0.14); color: var(--accent-blue); }
   .icon-badge.aqua  { background: rgba(25,158,112,0.14); color: var(--accent-aqua); }
   .icon-badge.green { background: rgba(12,163,12,0.13);  color: var(--good); }
@@ -59,6 +116,13 @@
 
   /* Hero row */
   .hero-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 860px) {
+    /* 3 colunas de largura fixa (1.3fr/1fr/1fr) espremem demais em tela de
+       celular — "Potência instalada" (a coluna mais estreita) acaba com
+       menos espaço que o número de 3 dígitos + unidade precisam. Empilha
+       em 1 coluna cheia em vez de espremer. */
+    .hero-row { grid-template-columns: 1fr; }
+  }
   .hero-card { padding: 20px 22px; }
   .hero-card .l { font-size: 12px; color: var(--ink-muted); font-weight: 500; }
   .hero-card .v-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
@@ -80,6 +144,9 @@
 
   /* Inverter row */
   .inv-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 860px) {
+    .inv-row { grid-template-columns: 1fr; }
+  }
   .inv-card { padding: 14px 18px 16px; }
   .inv-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .inv-id { display: flex; align-items: center; gap: 10px; }
@@ -205,6 +272,12 @@
   .day-grid .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 4px; }
   .day-grid .v { font-size: 15px; font-weight: 600; font-family: var(--font-data); }
   .day-grid .aux { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 3px; font-family: var(--font-data); }
+  @media (max-width: 860px) {
+    /* Mesmo problema do .hero-row/.inv-row: colunas de largura fixa
+       espremem em tela de celular (usado em Recordes do Histórico e
+       Confiabilidade da coleta em Saúde da instalação). */
+    .day-grid { grid-template-columns: 1fr; }
+  }
   .hero-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .hero-line .aux { font-size: 12.5px; color: var(--ink-muted); }
   .sparkline-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -226,6 +299,14 @@
      diferença de fonte visível em vez de escondida. */
   .day-timeline { display: flex; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
   .tl-day { flex: 1; text-align: center; background: var(--surface-2); border-radius: 8px; padding: 12px 8px 10px; display: flex; flex-direction: column; border: 1px solid transparent; position: relative; }
+
+  @media (max-width: 860px) {
+    /* 5 cartões com flex:1 espremem demais numa tela de celular — vira
+       carrossel horizontal (scroll + snap) em vez de cortar o último
+       cartão fora da tela. */
+    .day-timeline { overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+    .tl-day { flex: 0 0 104px; scroll-snap-align: start; }
+  }
   .tl-day.today { background: var(--surface-3); border-color: var(--accent-blue); }
   .tl-day.today::before {
     content: "HOJE"; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);

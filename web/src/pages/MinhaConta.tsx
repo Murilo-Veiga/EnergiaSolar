@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type Me } from "../lib/api";
+import { IconBadge } from "../components/icons";
 
 // Tela isolada de Administração — só ajustes da própria conta (e-mail e
 // senha). Gestão de outros usuários fica em Administração > Gestão de
@@ -25,21 +26,50 @@ export function MinhaConta() {
 
   return (
     <div>
-      <div className="admin-section">
-        <h3>Conta</h3>
-        <ProfileForm name={me.name} email={me.email} onSaved={load} />
+      <div className="card profile-hero">
+        <IconBadge name="user" color="blue" size="lg" />
+        <div>
+          <div className="profile-hero-name">{me.name || me.email}</div>
+          <div className="profile-hero-sub">
+            {me.email}
+            {me.username && ` · @${me.username}`}
+          </div>
+        </div>
       </div>
-      <div className="admin-section">
-        <h3>Senha</h3>
+
+      <div className="card panel-card">
+        <div className="panel-card-head">
+          <IconBadge name="settings" color="blue" size="card" />
+          <h3>Dados da conta</h3>
+        </div>
+        <ProfileForm name={me.name} email={me.email} username={me.username} onSaved={load} />
+      </div>
+
+      <div className="card panel-card">
+        <div className="panel-card-head">
+          <IconBadge name="shield" color="gold" size="card" />
+          <h3>Senha</h3>
+        </div>
         <PasswordForm />
       </div>
     </div>
   );
 }
 
-function ProfileForm({ name, email, onSaved }: { name: string; email: string; onSaved: () => Promise<void> }) {
+function ProfileForm({
+  name,
+  email,
+  username,
+  onSaved,
+}: {
+  name: string;
+  email: string;
+  username: string;
+  onSaved: () => Promise<void>;
+}) {
   const [nameValue, setNameValue] = useState(name);
   const [emailValue, setEmailValue] = useState(email);
+  const [usernameValue, setUsernameValue] = useState(username);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -47,7 +77,8 @@ function ProfileForm({ name, email, onSaved }: { name: string; email: string; on
   useEffect(() => {
     setNameValue(name);
     setEmailValue(email);
-  }, [name, email]);
+    setUsernameValue(username);
+  }, [name, email, username]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -55,7 +86,7 @@ function ProfileForm({ name, email, onSaved }: { name: string; email: string; on
     setError(null);
     setSuccess(false);
     try {
-      await api.put("/api/me", { email: emailValue, name: nameValue });
+      await api.put("/api/me", { email: emailValue, name: nameValue, username: usernameValue });
       setSuccess(true);
       await onSaved();
     } catch (err) {
@@ -74,6 +105,14 @@ function ProfileForm({ name, email, onSaved }: { name: string; email: string; on
       <label>
         E-mail
         <input type="email" value={emailValue} onChange={(e) => setEmailValue(e.target.value)} required />
+      </label>
+      <label>
+        Nome de usuário (opcional)
+        <input
+          value={usernameValue}
+          onChange={(e) => setUsernameValue(e.target.value)}
+          placeholder="pra entrar sem digitar o e-mail"
+        />
       </label>
       <div className="admin-form-full" style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button className="btn" type="submit" disabled={submitting}>

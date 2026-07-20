@@ -31,6 +31,18 @@ func mustLoadLocation(name string) *time.Location {
 // pra UTC — mesmo conceito de start_of_day_brazil/today_midnight_brt
 // usado no Python.
 func StartOfDay() time.Time {
-	now := time.Now().In(Location)
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Location).UTC()
+	return DayFromTime(time.Now())
+}
+
+// DayFromTime devolve a meia-noite (America/Sao_Paulo) do dia calendário
+// em que t cai, convertida pra UTC.
+func DayFromTime(t time.Time) time.Time {
+	local := t.In(Location)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, Location).UTC()
+}
+
+// DayFromUnixMillis é DayFromTime a partir de um timestamp em
+// milissegundos (formato usado pelas APIs Huawei/FoxESS).
+func DayFromUnixMillis(ms int64) time.Time {
+	return DayFromTime(time.UnixMilli(ms))
 }

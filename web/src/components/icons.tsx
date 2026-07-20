@@ -125,6 +125,13 @@ const ICONS: Record<string, (bg: string) => JSX.Element> = {
       />
     </>
   ),
+  menu: () => (
+    <>
+      <rect x="3" y="5.4" width="18" height="2.3" rx="1.15" fill="currentColor" />
+      <rect x="3" y="10.85" width="18" height="2.3" rx="1.15" fill="currentColor" />
+      <rect x="3" y="16.3" width="18" height="2.3" rx="1.15" fill="currentColor" />
+    </>
+  ),
 };
 
 export function iconBody(name: string, bg: string): JSX.Element | null {
@@ -153,12 +160,13 @@ export function IconBadge({
 }: {
   name: string;
   color?: IconColor;
-  size?: "nav" | "card" | "alert" | "fc";
+  size?: "nav" | "card" | "alert" | "fc" | "lg";
 }) {
   const bg = COLOR_BG[color];
-  // Espelha paintIconBadges(): size-card renderiza o SVG em 18px, todo o
-  // resto (nav/alert/fc) em 15px — só o viewBox interno continua 24x24.
-  const pixelSize = size === "card" ? 18 : 15;
+  // Espelha paintIconBadges(): size-card renderiza o SVG em 18px, size-lg
+  // (logo de telas de auth) em 24px, todo o resto (nav/alert/fc) em 15px —
+  // só o viewBox interno continua 24x24.
+  const pixelSize = size === "lg" ? 24 : size === "card" ? 18 : 15;
   return (
     <span className={`icon-badge ${color} size-${size}`}>
       <svg width={pixelSize} height={pixelSize} viewBox="0 0 24 24">

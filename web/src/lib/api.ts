@@ -1,6 +1,14 @@
 // Cliente HTTP único da API — sessão via cookie httpOnly (nunca lida
 // diretamente pelo React), sempre com credentials:"include".
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8090";
+//
+// URL sempre RELATIVA (mesma origem da página, nunca um host fixado em
+// build-time) — de propósito: um bundle com "http://localhost:8091"
+// embutido só funciona em quem abre o painel no MESMO PC do servidor
+// (localhost ali resolve pro PC de quem está acessando, não pro
+// servidor). Em produção o nginx do container web faz proxy de /api pra
+// api-go (ver nginx.conf); em dev o Vite faz o mesmo (ver vite.config.ts)
+// — em ambos os casos o browser só fala com a própria origem.
+const API_URL = "";
 
 export class ApiError extends Error {
   status: number;
@@ -48,13 +56,16 @@ export const api = {
 export interface Me {
   user_id: string;
   email: string;
+  username: string;
   name: string;
   is_admin: boolean;
 }
 
 export interface AdminUser {
   id: string;
+  name: string;
   email: string;
+  username: string;
   is_admin: boolean;
   created_at: string;
   plants_count: number;
@@ -75,11 +86,22 @@ export interface Plant {
   timezone: string;
 }
 
+export interface InverterDeviceInfo {
+  station_code?: string;
+  dev_dn?: string;
+  device_sn?: string;
+  power_kw?: number;
+  day_kwh?: number;
+  temperature_c?: number;
+  error?: string;
+}
+
 export interface InverterCredential {
   id: string;
   brand: "huawei" | "foxess";
   enabled: boolean;
   configured: boolean;
+  device_info?: InverterDeviceInfo;
 }
 
 export interface Summary {

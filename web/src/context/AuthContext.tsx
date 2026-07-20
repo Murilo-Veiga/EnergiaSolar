@@ -8,8 +8,7 @@ interface AuthContextValue {
   userId: string | null;
   plants: Plant[];
   refreshPlants: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -55,16 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshPlants]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      await api.post("/api/auth/login", { email, password });
-      await refreshPlants();
-    },
-    [refreshPlants],
-  );
-
-  const signup = useCallback(
-    async (email: string, password: string) => {
-      await api.post("/api/auth/signup", { email, password });
+    async (identifier: string, password: string) => {
+      // O backend aceita e-mail ou username no mesmo campo "email".
+      await api.post("/api/auth/login", { email: identifier, password });
       await refreshPlants();
     },
     [refreshPlants],
@@ -77,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ authenticated, loading, isAdmin, userId, plants, refreshPlants, login, signup, logout }}>
+    <AuthContext.Provider value={{ authenticated, loading, isAdmin, userId, plants, refreshPlants, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

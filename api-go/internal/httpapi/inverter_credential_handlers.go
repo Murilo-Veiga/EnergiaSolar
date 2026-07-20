@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -52,12 +53,19 @@ func encodeCredentialSecrets(in inverterCredentialIn) (string, error) {
 }
 
 type inverterCredentialResponse struct {
-	ID         string `json:"id"`
-	Brand      string `json:"brand"`
-	Enabled    bool   `json:"enabled"`
-	Configured bool   `json:"configured"`
+	ID         string              `json:"id"`
+	Brand      string              `json:"brand"`
+	Enabled    bool                `json:"enabled"`
+	Configured bool                `json:"configured"`
+	DeviceInfo *inverterDeviceInfo `json:"device_info,omitempty"`
 }
 
+// handleListInverterCredentials devolve o último retrato CONHECIDO de cada
+// inversor (station_code/dev_dn/device_sn já descobertos + último ponto de
+// inverter_status) — nunca chama a API do fabricante ao vivo, pra listar
+// ficar rápido mesmo com N credenciais. Fica desatualizado só se o
+// coletor/o backfill nunca rodaram ainda pra essa credencial (recém criada
+// e ainda sem 1º ciclo) — POST/PUT preenchem isso na hora (ver abaixo).
 func (s *Server) handleListInverterCredentials(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
 	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
@@ -65,8 +73,19 @@ func (s *Server) handleListInverterCredentials(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rows, err := s.DB.Query(r.Context(),
-		`SELECT id, brand, enabled FROM inverter_credentials WHERE plant_id = $1 ORDER BY brand`, plantID)
+	rows, err := s.DB.Query(r.Context(), `
+		SELECT c.id, c.brand, c.enabled,
+		       c.discovered_station_code, c.discovered_dev_dn, c.discovered_device_sn,
+		       latest.power_kw, latest.day_kwh, latest.temperature_c
+		FROM inverter_credentials c
+		LEFT JOIN LATERAL (
+		  SELECT power_kw, day_kwh, temperature_c
+		  FROM inverter_status
+		  WHERE plant_id = c.plant_id AND inverter = c.brand
+		  ORDER BY recorded_at DESC LIMIT 1
+		) latest ON true
+		WHERE c.plant_id = $1
+		ORDER BY c.brand`, plantID)
 	if err != nil {
 		writeInternalError(w, err, "falha ao listar credenciais")
 		return
@@ -76,11 +95,17 @@ func (s *Server) handleListInverterCredentials(w http.ResponseWriter, r *http.Re
 	result := []inverterCredentialResponse{}
 	for rows.Next() {
 		var c inverterCredentialResponse
-		if err := rows.Scan(&c.ID, &c.Brand, &c.Enabled); err != nil {
+		var info inverterDeviceInfo
+		if err := rows.Scan(&c.ID, &c.Brand, &c.Enabled,
+			&info.StationCode, &info.DevDn, &info.DeviceSN,
+			&info.PowerKW, &info.DayKWh, &info.TemperatureC); err != nil {
 			writeInternalError(w, err, "falha ao ler credenciais")
 			return
 		}
 		c.Configured = true
+		if info.StationCode != nil || info.DevDn != nil || info.DeviceSN != nil || info.PowerKW != nil {
+			c.DeviceInfo = &info
+		}
 		result = append(result, c)
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -128,7 +153,10 @@ func (s *Server) handleCreateInverterCredential(w http.ResponseWriter, r *http.R
 		writeInternalError(w, err, "falha ao salvar credencial")
 		return
 	}
-	writeJSON(w, http.StatusCreated, inverterCredentialResponse{ID: credID, Brand: in.Brand, Enabled: enabled, Configured: true})
+
+	resp := inverterCredentialResponse{ID: credID, Brand: in.Brand, Enabled: enabled, Configured: true}
+	resp.DeviceInfo = s.discoverAndPersistSnapshot(r.Context(), credID, in)
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (s *Server) handleUpdateInverterCredential(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +237,79 @@ func (s *Server) handleUpdateInverterCredential(w http.ResponseWriter, r *http.R
 		writeInternalError(w, err, "falha ao consultar credencial atualizada")
 		return
 	}
-	writeJSON(w, http.StatusOK, inverterCredentialResponse{ID: credID, Brand: in.Brand, Enabled: enabled, Configured: true})
+
+	resp := inverterCredentialResponse{ID: credID, Brand: in.Brand, Enabled: enabled, Configured: true}
+	if hasNewSecret {
+		// Credencial mudou de verdade — busca ao vivo pra usuário ver o
+		// inversor certo na hora, sem esperar o coletor.
+		resp.DeviceInfo = s.discoverAndPersistSnapshot(r.Context(), credID, in)
+	} else {
+		// Só enabled mudou — não vale a pena gastar uma chamada à API do
+		// fabricante (a Huawei em particular tem rate limit apertado),
+		// devolve o último retrato já em cache.
+		resp.DeviceInfo = s.loadCachedDeviceInfo(r.Context(), credID)
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// discoverAndPersistSnapshot busca o inversor AO VIVO na API do
+// fabricante (mesma descoberta que o coletor faria no 1º ciclo) e já
+// grava station_code/dev_dn/device_sn no banco, pra o coletor reaproveitar
+// em vez de descobrir de novo. Nunca falha a requisição por causa disso —
+// se a busca ao vivo der erro, devolve o erro dentro de DeviceInfo.Error e
+// deixa pro próximo ciclo do coletor tentar de novo.
+func (s *Server) discoverAndPersistSnapshot(ctx context.Context, credID string, in inverterCredentialIn) *inverterDeviceInfo {
+	baseURL := in.BaseURL
+	if baseURL == "" {
+		if settings, err := s.loadSystemSettings(ctx); err == nil {
+			if in.Brand == "huawei" {
+				baseURL = settings.HuaweiBaseURL
+			} else if in.Brand == "foxess" {
+				baseURL = settings.FoxessBaseURL
+			}
+		}
+	}
+
+	fetchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	info := fetchLiveInverterSnapshot(fetchCtx, in, baseURL)
+
+	if info.StationCode != nil || info.DevDn != nil || info.DeviceSN != nil {
+		if _, err := s.DB.Exec(ctx,
+			`UPDATE inverter_credentials
+			 SET discovered_station_code = COALESCE($1, discovered_station_code),
+			     discovered_dev_dn = COALESCE($2, discovered_dev_dn),
+			     discovered_device_sn = COALESCE($3, discovered_device_sn)
+			 WHERE id = $4`,
+			info.StationCode, info.DevDn, info.DeviceSN, credID,
+		); err != nil {
+			slog.Default().Error("falha ao gravar descoberta imediata", "credential_id", credID, "error", err)
+		}
+	}
+	return &info
+}
+
+func (s *Server) loadCachedDeviceInfo(ctx context.Context, credID string) *inverterDeviceInfo {
+	var info inverterDeviceInfo
+	err := s.DB.QueryRow(ctx, `
+		SELECT c.discovered_station_code, c.discovered_dev_dn, c.discovered_device_sn,
+		       latest.power_kw, latest.day_kwh, latest.temperature_c
+		FROM inverter_credentials c
+		LEFT JOIN LATERAL (
+		  SELECT power_kw, day_kwh, temperature_c
+		  FROM inverter_status
+		  WHERE plant_id = c.plant_id AND inverter = c.brand
+		  ORDER BY recorded_at DESC LIMIT 1
+		) latest ON true
+		WHERE c.id = $1`, credID,
+	).Scan(&info.StationCode, &info.DevDn, &info.DeviceSN, &info.PowerKW, &info.DayKWh, &info.TemperatureC)
+	if err != nil {
+		return nil
+	}
+	if info.StationCode == nil && info.DevDn == nil && info.DeviceSN == nil && info.PowerKW == nil {
+		return nil
+	}
+	return &info
 }
 
 func (s *Server) handleDeleteInverterCredential(w http.ResponseWriter, r *http.Request) {

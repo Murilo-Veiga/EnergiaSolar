@@ -20,10 +20,8 @@ type annotationRow struct {
 }
 
 // handleCreateAnnotation grava 1 anotação por dia — gravar de novo no
-// mesmo dia sobrescreve a anterior (ON CONFLICT), mesmo comportamento de
-// create_annotation() em webapp/main.py (que dependia do InfluxDB
-// sobrescrever pontos com a mesma tag/timestamp; aqui é explícito via
-// upsert na PK (plant_id, day) da tabela annotation).
+// mesmo dia sobrescreve a anterior, via upsert explícito na PK
+// (plant_id, day) da tabela annotation.
 func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
 	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {

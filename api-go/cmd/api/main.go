@@ -50,12 +50,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "http://localhost:5173" // servidor de dev do Vite
-	}
-
-	server := &httpapi.Server{DB: pool, JWTSecret: jwtSecret, EncryptionKey: encryptionKey, AllowedOrigin: allowedOrigin}
+	server := &httpapi.Server{DB: pool, JWTSecret: jwtSecret, EncryptionKey: encryptionKey}
 	httpServer := &http.Server{
 		Addr:              ":8000",
 		Handler:           httpapi.NewRouter(server),
