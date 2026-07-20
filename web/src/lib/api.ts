@@ -1,6 +1,14 @@
 // Cliente HTTP único da API — sessão via cookie httpOnly (nunca lida
 // diretamente pelo React), sempre com credentials:"include".
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8091";
+//
+// URL sempre RELATIVA (mesma origem da página, nunca um host fixado em
+// build-time) — de propósito: um bundle com "http://localhost:8091"
+// embutido só funciona em quem abre o painel no MESMO PC do servidor
+// (localhost ali resolve pro PC de quem está acessando, não pro
+// servidor). Em produção o nginx do container web faz proxy de /api pra
+// api-go (ver nginx.conf); em dev o Vite faz o mesmo (ver vite.config.ts)
+// — em ambos os casos o browser só fala com a própria origem.
+const API_URL = "";
 
 export class ApiError extends Error {
   status: number;

@@ -117,7 +117,9 @@ fi
 echo "==> Subindo web (vite dev, porta $WEB_PORT)..."
 (
   cd "$ROOT_DIR/web"
-  VITE_API_URL="http://localhost:${API_PORT}" npx vite --port "$WEB_PORT" 2>&1 | sed -u 's/^/[web] /'
+  # Vite faz proxy de /api pra api-go (ver vite.config.ts) — igual o nginx
+  # faz em produção, o browser só fala com a própria origem.
+  VITE_DEV_API_TARGET="http://localhost:${API_PORT}" npx vite --port "$WEB_PORT" 2>&1 | sed -u 's/^/[web] /'
 ) &
 PIDS+=($!)
 

@@ -39,8 +39,6 @@ services:
   web:
     build:
       context: ./web
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8091}
     container_name: solar-web
     restart: unless-stopped
     ports:

@@ -59,8 +59,11 @@ cp .env.example .env   # preencher POSTGRES_PASSWORD, JWT_SECRET, CONFIG_ENCRYPT
 docker compose up -d --build
 ```
 
-- Painel: http://localhost:8090
-- API: http://localhost:8091
+- Painel: http://localhost:8090 (ou `http://<IP-do-servidor>:8090` de outro
+  PC na rede — o nginx do container `web` faz proxy de `/api` pra
+  `api-go` automaticamente, então o browser sempre chama a própria
+  origem, nunca um host fixado em build-time)
+- API (acesso direto, ex. Postman): http://localhost:8091
 
 Primeiro acesso: não há mais cadastro público — crie o primeiro usuário
 direto no banco ou peça pra um admin existente criar em Administração >
