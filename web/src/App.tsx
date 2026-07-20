@@ -4,6 +4,7 @@ import { PlantProvider } from "./context/PlantContext";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 import { Administracao } from "./pages/Administracao";
+import { MinhasUsinas } from "./pages/MinhasUsinas";
 import { MinhaConta } from "./pages/MinhaConta";
 import { DashboardTab } from "./pages/Dashboard/DashboardTab";
 import { HistoricoTab } from "./pages/Dashboard/HistoricoTab";
@@ -11,13 +12,14 @@ import { SaudeTab } from "./pages/Dashboard/SaudeTab";
 import { ConsumoTab } from "./pages/Dashboard/ConsumoTab";
 import { NavBar } from "./components/NavBar";
 
-export type TabName = "dashboard" | "historico" | "saude" | "consumo" | "administracao" | "minha-conta";
+export type TabName = "dashboard" | "historico" | "saude" | "consumo" | "minhas-usinas" | "administracao" | "minha-conta";
 
 const TITLES: Record<TabName, string> = {
   dashboard: "Dashboard",
   historico: "Histórico",
   saude: "Saúde da usina",
   consumo: "Consumo",
+  "minhas-usinas": "Minhas usinas",
   administracao: "Administração",
   "minha-conta": "Minha conta",
 };
@@ -43,10 +45,10 @@ function App() {
 
   const activePlant = plants.find((p) => p.id === selectedPlantId) ?? plants[0] ?? null;
 
-  // Sem nenhuma usina cadastrada ainda: força a aba Administração — não dá
+  // Sem nenhuma usina cadastrada ainda: força a aba Minhas usinas — não dá
   // pra abrir Dashboard/Histórico/Saúde sem usina nenhuma selecionada.
   // "Minha conta" não depende de usina, então fica de fora dessa trava.
-  const effectiveTab: TabName = !activePlant && tab !== "minha-conta" ? "administracao" : tab;
+  const effectiveTab: TabName = !activePlant && tab !== "minha-conta" ? "minhas-usinas" : tab;
 
   return (
     <div className="app">
@@ -61,13 +63,15 @@ function App() {
           )}
         </div>
 
-        {effectiveTab === "administracao" && (
-          <Administracao plants={plants} activePlantId={activePlant?.id ?? null} onSelectPlant={setSelectedPlantId} />
+        {effectiveTab === "minhas-usinas" && (
+          <MinhasUsinas plants={plants} activePlantId={activePlant?.id ?? null} onSelectPlant={setSelectedPlantId} />
         )}
+
+        {effectiveTab === "administracao" && <Administracao />}
 
         {effectiveTab === "minha-conta" && <MinhaConta />}
 
-        {activePlant && effectiveTab !== "administracao" && effectiveTab !== "minha-conta" && (
+        {activePlant && effectiveTab !== "administracao" && effectiveTab !== "minha-conta" && effectiveTab !== "minhas-usinas" && (
           <PlantProvider plant={activePlant}>
             {effectiveTab === "dashboard" && <DashboardTab onUpdatedAt={setUpdatedAt} />}
             {effectiveTab === "historico" && <HistoricoTab />}

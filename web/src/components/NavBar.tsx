@@ -3,12 +3,13 @@ import { NewBadge } from "./NewBadge";
 import type { TabName } from "../App";
 import { useAuth } from "../context/AuthContext";
 
-const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "green" | "aqua"; newKey?: string }[] = [
+const NAV_ITEMS: { tab: TabName; label: string; icon: string; color: "blue" | "green" | "aqua"; newKey?: string; adminOnly?: boolean }[] = [
   { tab: "dashboard", label: "Dashboard", icon: "layoutGrid", color: "blue" },
   { tab: "historico", label: "Histórico", icon: "trendingUp", color: "blue" },
   { tab: "saude", label: "Saúde da usina", icon: "activity", color: "green", newKey: "nav-saude" },
   { tab: "consumo", label: "Consumo", icon: "wallet", color: "aqua" },
-  { tab: "administracao", label: "Administração", icon: "settings", color: "blue" },
+  { tab: "minhas-usinas", label: "Minhas usinas", icon: "sun", color: "green" },
+  { tab: "administracao", label: "Administração", icon: "settings", color: "blue", adminOnly: true },
 ];
 
 export function NavBar({
@@ -20,7 +21,8 @@ export function NavBar({
   onSelect: (tab: TabName) => void;
   onMyAccount: () => void;
 }) {
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
+  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <aside className="sidebar" style={{ display: "flex", flexDirection: "column" }}>
@@ -32,7 +34,7 @@ export function NavBar({
         </div>
       </div>
       <nav className="nav">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <a
             key={item.tab}
             className={active === item.tab ? "active" : ""}
