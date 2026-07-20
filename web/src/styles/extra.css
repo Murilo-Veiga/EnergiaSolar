@@ -33,6 +33,31 @@
   gap: 14px;
 }
 
+.auth-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.auth-logo-img {
+  /* Fonte tem 300x200px (3:2) — a logo em si (ícone + "SOLAR HOME") ocupa
+     quase todo o canvas, então travar a ALTURA (não a largura) evita que o
+     card fique com muito espaço vazio acima/abaixo dela. */
+  height: 110px;
+  width: auto;
+  max-width: 100%;
+  display: block;
+}
+
+.auth-logo-sub {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .auth-card h1 {
   font-size: 18px;
   margin: 0 0 4px;

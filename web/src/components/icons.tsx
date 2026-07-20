@@ -153,12 +153,13 @@ export function IconBadge({
 }: {
   name: string;
   color?: IconColor;
-  size?: "nav" | "card" | "alert" | "fc";
+  size?: "nav" | "card" | "alert" | "fc" | "lg";
 }) {
   const bg = COLOR_BG[color];
-  // Espelha paintIconBadges(): size-card renderiza o SVG em 18px, todo o
-  // resto (nav/alert/fc) em 15px — só o viewBox interno continua 24x24.
-  const pixelSize = size === "card" ? 18 : 15;
+  // Espelha paintIconBadges(): size-card renderiza o SVG em 18px, size-lg
+  // (logo de telas de auth) em 24px, todo o resto (nav/alert/fc) em 15px —
+  // só o viewBox interno continua 24x24.
+  const pixelSize = size === "lg" ? 24 : size === "card" ? 18 : 15;
   return (
     <span className={`icon-badge ${color} size-${size}`}>
       <svg width={pixelSize} height={pixelSize} viewBox="0 0 24 24">

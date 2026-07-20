@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import { PlantProvider } from "./context/PlantContext";
 import { Login } from "./pages/Login";
-import { Signup } from "./pages/Signup";
 import { Administracao } from "./pages/Administracao";
 import { MinhasUsinas } from "./pages/MinhasUsinas";
 import { MinhaConta } from "./pages/MinhaConta";
@@ -26,7 +25,6 @@ const TITLES: Record<TabName, string> = {
 
 function App() {
   const { authenticated, loading, plants } = useAuth();
-  const [authView, setAuthView] = useState<"login" | "signup">("login");
   const [tab, setTab] = useState<TabName>("dashboard");
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -36,11 +34,7 @@ function App() {
   }
 
   if (!authenticated) {
-    return authView === "login" ? (
-      <Login onSwitchToSignup={() => setAuthView("signup")} />
-    ) : (
-      <Signup onSwitchToLogin={() => setAuthView("login")} />
-    );
+    return <Login />;
   }
 
   const activePlant = plants.find((p) => p.id === selectedPlantId) ?? plants[0] ?? null;

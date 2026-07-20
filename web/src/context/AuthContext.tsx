@@ -9,7 +9,6 @@ interface AuthContextValue {
   plants: Plant[];
   refreshPlants: () => Promise<void>;
   login: (identifier: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, username?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -63,14 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshPlants],
   );
 
-  const signup = useCallback(
-    async (email: string, password: string, username?: string) => {
-      await api.post("/api/auth/signup", { email, password, username: username ?? "" });
-      await refreshPlants();
-    },
-    [refreshPlants],
-  );
-
   const logout = useCallback(async () => {
     await api.post("/api/auth/logout");
     setAuthenticated(false);
@@ -78,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ authenticated, loading, isAdmin, userId, plants, refreshPlants, login, signup, logout }}>
+    <AuthContext.Provider value={{ authenticated, loading, isAdmin, userId, plants, refreshPlants, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

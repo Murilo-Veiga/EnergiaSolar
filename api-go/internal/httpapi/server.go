@@ -13,10 +13,4 @@ type Server struct {
 	DB            *pgxpool.Pool
 	JWTSecret     []byte
 	EncryptionKey []byte
-	// AllowedOrigins são as origens do frontend React liberadas no CORS
-	// (dev: localhost:5173, produção: o serviço web) — precisam ser
-	// explícitas (não "*") porque a sessão usa cookie com
-	// credentials:"include". Aceita mais de uma pra dev e produção
-	// funcionarem ao mesmo tempo.
-	AllowedOrigins []string
 }

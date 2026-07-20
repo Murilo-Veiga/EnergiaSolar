@@ -73,40 +73,6 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, userID string) error {
 	return nil
 }
 
-func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
-	var req signupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || len(req.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "email válido e senha com pelo menos 8 caracteres são obrigatórios")
-		return
-	}
-
-	hash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "falha ao processar senha")
-		return
-	}
-
-	var userID string
-	err = s.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, username, password_hash) VALUES ($1, NULLIF($2, ''), $3) RETURNING id`,
-		req.Email, req.Username, hash,
-	).Scan(&userID)
-	if err != nil {
-		if msg, ok := usernameConflictMessage(err); ok {
-			writeError(w, http.StatusConflict, msg)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "falha ao criar usuário")
-		return
-	}
-
-	if err := s.setSessionCookie(w, userID); err != nil {
-		writeError(w, http.StatusInternalServerError, "falha ao criar sessão")
-		return
-	}
-	writeJSON(w, http.StatusCreated, authResponse{UserID: userID, Email: req.Email, Username: req.Username})
-}
-
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req signupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -51,15 +50,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	allowedOrigins := strings.Split(os.Getenv("CORS_ALLOWED_ORIGIN"), ",")
-	for i, origin := range allowedOrigins {
-		allowedOrigins[i] = strings.TrimSpace(origin)
-	}
-	if len(allowedOrigins) == 1 && allowedOrigins[0] == "" {
-		allowedOrigins = []string{"http://localhost:5173"} // servidor de dev do Vite
-	}
-
-	server := &httpapi.Server{DB: pool, JWTSecret: jwtSecret, EncryptionKey: encryptionKey, AllowedOrigins: allowedOrigins}
+	server := &httpapi.Server{DB: pool, JWTSecret: jwtSecret, EncryptionKey: encryptionKey}
 	httpServer := &http.Server{
 		Addr:              ":8000",
 		Handler:           httpapi.NewRouter(server),

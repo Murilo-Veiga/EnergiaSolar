@@ -22,7 +22,6 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-solarhome}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-solarhome}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET}
       CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
-      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:3000}
     depends_on:
       - postgres
 

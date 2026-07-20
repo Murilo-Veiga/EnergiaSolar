@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../lib/api";
 
-export function Login({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
+export function Login() {
   const { login } = useAuth();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +25,10 @@ export function Login({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
   return (
     <div className="auth-screen">
       <form className="card auth-card" onSubmit={handleSubmit}>
-        <h1>Entrar</h1>
+        <div className="auth-logo">
+          <img src="/solar_home.png" alt="Solar Home" className="auth-logo-img" />
+          <div className="auth-logo-sub">Painel de Monitoramento</div>
+        </div>
         <label>
           E-mail ou usuário
           <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
@@ -38,8 +41,8 @@ export function Login({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
         <button type="submit" disabled={submitting}>
           {submitting ? "Entrando..." : "Entrar"}
         </button>
-        <button type="button" className="auth-link" onClick={onSwitchToSignup}>
-          Não tem conta? Criar uma
+        <button type="button" className="auth-link">
+          Esqueci minha senha
         </button>
       </form>
     </div>
