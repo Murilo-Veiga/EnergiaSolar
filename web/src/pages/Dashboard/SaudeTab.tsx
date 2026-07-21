@@ -55,7 +55,6 @@ export function SaudeTab() {
       borderRadius: 4,
       borderSkipped: false,
       maxBarThickness: 26,
-      stack: "s",
     }));
 
     chartRef.current?.destroy();
@@ -67,8 +66,8 @@ export function SaudeTab() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { stacked: true, ticks: { color: "#898781" }, grid: { display: false } },
-          y: { stacked: true, ticks: { color: "#898781" }, grid: { color: "#2c2c2a" }, beginAtZero: true },
+          x: { ticks: { color: "#898781" }, grid: { display: false } },
+          y: { ticks: { color: "#898781" }, grid: { color: "#2c2c2a" }, beginAtZero: true },
         },
       },
     });
