@@ -73,6 +73,9 @@ func NewRouter(s *Server) http.Handler {
 			r.Post("/inverters-config/test", s.handleTestInverterCredential)
 			r.Put("/inverters-config/{credID}", s.handleUpdateInverterCredential)
 			r.Delete("/inverters-config/{credID}", s.handleDeleteInverterCredential)
+			r.Get("/access", s.handleListPlantAccess)
+			r.Post("/access", s.handleGrantPlantAccess)
+			r.Delete("/access/{userID}", s.handleRevokePlantAccess)
 		})
 	})
 

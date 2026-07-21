@@ -227,7 +227,7 @@ func fetchForecastDays(lat, lon float64) ([]forecastDay, error) {
 
 func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	plant, err := s.authorizePlant(r.Context(), plantID)
+	plant, err := s.authorizePlantView(r.Context(), plantID)
 	if err != nil {
 		respondPlantAuthError(w, err)
 		return
@@ -264,7 +264,7 @@ type dayStatusResponse struct {
 
 func (s *Server) handleDayStatus(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	plant, err := s.authorizePlant(r.Context(), plantID)
+	plant, err := s.authorizePlantView(r.Context(), plantID)
 	if err != nil {
 		respondPlantAuthError(w, err)
 		return
