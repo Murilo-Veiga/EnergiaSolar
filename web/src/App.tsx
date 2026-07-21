@@ -22,7 +22,7 @@ const TITLES: Record<TabName, string> = {
   historico: "Histórico",
   saude: "Saúde da instalação",
   consumo: "Consumo",
-  "minhas-usinas": "Minhas instalações",
+  "minhas-usinas": "Gerenciar usinas",
   administracao: "Administração",
   "minha-conta": "Minha conta",
 };

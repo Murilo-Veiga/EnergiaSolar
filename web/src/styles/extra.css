@@ -114,6 +114,42 @@
   font-size: 12.5px;
 }
 
+/* Gerenciar usinas — lista à esquerda (fixa/sticky), detalhes da usina
+   selecionada à direita empilhados em cards, em vez de tudo numa coluna só
+   de largura total (desperdiçava espaço horizontal em telas largas). */
+.usinas-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.usinas-list-col {
+  position: sticky;
+  top: 20px;
+}
+
+.usinas-detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usinas-detail-col .panel-card {
+  margin-bottom: 0;
+}
+
+@media (max-width: 860px) {
+  /* Mesmo breakpoint da sidebar — abaixo dele a coluna fixa de 320px não
+     cabe mais ao lado do conteúdo, empilha tudo verticalmente. */
+  .usinas-layout {
+    grid-template-columns: 1fr;
+  }
+  .usinas-list-col {
+    position: static;
+  }
+}
+
 /* Administração */
 
 .admin-section {

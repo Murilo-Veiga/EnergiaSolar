@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type InverterCredential, type InverterDeviceInfo, type Plant, type PlantAccessUser } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { IconBadge } from "../components/icons";
 
 interface Props {
   plants: Plant[];
@@ -13,9 +14,12 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
   const activePlant = plants.find((p) => p.id === activePlantId) ?? null;
 
   return (
-    <div>
-      <div className="admin-section">
-        <h3>Suas instalações</h3>
+    <div className="usinas-layout">
+      <div className="card panel-card usinas-list-col">
+        <div className="panel-card-head">
+          <IconBadge name="sun" color="green" size="card" />
+          <h3>Suas usinas</h3>
+        </div>
         <div className="plant-list">
           {plants.map((p) => (
             <div
@@ -34,38 +38,50 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
               <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>{p.installed_power_kwp} kWp</span>
             </div>
           ))}
-          {plants.length === 0 && <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nenhuma instalação cadastrada ainda.</div>}
+          {plants.length === 0 && <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nenhuma usina cadastrada ainda.</div>}
         </div>
         <NewPlantForm onCreated={refreshPlants} />
       </div>
 
       {activePlant && (
-        <>
+        <div className="usinas-detail-col">
           {activePlant.is_owner ? (
             <>
-              <div className="admin-section">
-                <h3>Dados da instalação</h3>
+              <div className="card panel-card">
+                <div className="panel-card-head">
+                  <IconBadge name="mapPin" color="blue" size="card" />
+                  <h3>Dados da usina</h3>
+                </div>
                 <PlantForm plant={activePlant} onSaved={refreshPlants} onDeleted={() => { onSelectPlant(null); void refreshPlants(); }} />
               </div>
-              <div className="admin-section">
-                <h3>Inversores da instalação</h3>
+              <div className="card panel-card">
+                <div className="panel-card-head">
+                  <IconBadge name="plug" color="aqua" size="card" />
+                  <h3>Inversores</h3>
+                </div>
                 <CredentialsManager plantId={activePlant.id} />
               </div>
-              <div className="admin-section">
-                <h3>Compartilhamento</h3>
+              <div className="card panel-card">
+                <div className="panel-card-head">
+                  <IconBadge name="user" color="gold" size="card" />
+                  <h3>Compartilhamento</h3>
+                </div>
                 <PlantAccessManager plantId={activePlant.id} />
               </div>
             </>
           ) : (
-            <div className="admin-section">
-              <h3>{activePlant.name}</h3>
+            <div className="card panel-card">
+              <div className="panel-card-head">
+                <IconBadge name="sun" color="green" size="card" />
+                <h3>{activePlant.name}</h3>
+              </div>
               <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>
-                Você tem acesso de visualização a esta instalação, concedido pelo dono — veja os dados no Dashboard.
+                Você tem acesso de visualização a esta usina, concedido pelo dono — veja os dados no Dashboard.
                 Edição de dados e credenciais só pelo dono.
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -111,7 +127,7 @@ function PlantAccessManager({ plantId }: { plantId: string }) {
   }
 
   async function revoke(user: PlantAccessUser) {
-    if (!confirm(`Remover o acesso de "${user.email}" a esta instalação?`)) return;
+    if (!confirm(`Remover o acesso de "${user.email}" a esta usina?`)) return;
     try {
       await api.delete(`/api/plants/${plantId}/access/${user.id}`);
       await load();
@@ -123,7 +139,7 @@ function PlantAccessManager({ plantId }: { plantId: string }) {
   return (
     <div>
       <div style={{ color: "var(--ink-muted)", fontSize: 12, marginBottom: 10 }}>
-        Contas com acesso enxergam o dashboard, histórico, saúde e consumo desta instalação — somente leitura, sem
+        Contas com acesso enxergam o dashboard, histórico, saúde e consumo desta usina — somente leitura, sem
         editar dados nem credenciais. A conta precisa já existir (criada em Administração &gt; Gestão de usuários).
       </div>
       {loading ? (
@@ -181,7 +197,7 @@ function NewPlantForm({ onCreated }: { onCreated: () => Promise<void> }) {
       setOpen(false);
       await onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao criar instalação");
+      setError(err instanceof ApiError ? err.message : "Falha ao criar usina");
     } finally {
       setSubmitting(false);
     }
@@ -190,19 +206,19 @@ function NewPlantForm({ onCreated }: { onCreated: () => Promise<void> }) {
   if (!open) {
     return (
       <button className="btn btn-secondary" onClick={() => setOpen(true)}>
-        + Nova instalação
+        + Nova usina
       </button>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+    <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
       <input
-        placeholder="Nome da instalação"
+        placeholder="Nome da usina"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
-        style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 7, padding: "8px 9px", color: "var(--ink)" }}
+        style={{ flex: "1 1 100%", minWidth: 0, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 7, padding: "8px 9px", color: "var(--ink)" }}
       />
       <button className="btn" type="submit" disabled={submitting}>
         Criar
@@ -250,7 +266,7 @@ function PlantForm({ plant, onSaved, onDeleted }: { plant: Plant; onSaved: () =>
   }
 
   async function handleDelete() {
-    if (!confirm(`Remover a instalação "${plant.name}"? Isso apaga também as credenciais associadas.`)) return;
+    if (!confirm(`Remover a usina "${plant.name}"? Isso apaga também as credenciais associadas.`)) return;
     await api.delete(`/api/plants/${plant.id}`);
     onDeleted();
   }
@@ -278,7 +294,7 @@ function PlantForm({ plant, onSaved, onDeleted }: { plant: Plant; onSaved: () =>
           Salvar
         </button>
         <button className="btn btn-danger" type="button" onClick={handleDelete}>
-          Remover instalação
+          Remover usina
         </button>
         {error && <span className="auth-error">{error}</span>}
       </div>
