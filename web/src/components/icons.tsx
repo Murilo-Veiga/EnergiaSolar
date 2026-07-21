@@ -132,6 +132,15 @@ const ICONS: Record<string, (bg: string) => JSX.Element> = {
       <rect x="3" y="16.3" width="18" height="2.3" rx="1.15" fill="currentColor" />
     </>
   ),
+  bell: () => (
+    <>
+      <path
+        d="M12 2.5a5.6 5.6 0 0 0-5.6 5.6v3.1c0 1-.4 1.9-1.1 2.6l-1 1a1 1 0 0 0 .7 1.7h14a1 1 0 0 0 .7-1.7l-1-1a3.6 3.6 0 0 1-1.1-2.6V8.1A5.6 5.6 0 0 0 12 2.5Z"
+        fill="currentColor"
+      />
+      <path d="M9.5 19.5a2.5 2.5 0 0 0 5 0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </>
+  ),
 };
 
 export function iconBody(name: string, bg: string): JSX.Element | null {

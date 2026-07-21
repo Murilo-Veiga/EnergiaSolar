@@ -11,6 +11,9 @@ import { SaudeTab } from "./pages/Dashboard/SaudeTab";
 import { ConsumoTab } from "./pages/Dashboard/ConsumoTab";
 import { NavBar } from "./components/NavBar";
 import { IconBadge } from "./components/icons";
+import { TopbarAlerts } from "./components/TopbarAlerts";
+import { PlantSwitcher } from "./components/PlantSwitcher";
+import type { Alert } from "./lib/alerts";
 
 export type TabName = "dashboard" | "historico" | "saude" | "consumo" | "minhas-usinas" | "administracao" | "minha-conta";
 
@@ -29,6 +32,7 @@ function App() {
   const [tab, setTab] = useState<TabName>("dashboard");
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   if (loading) {
@@ -64,11 +68,15 @@ function App() {
             </button>
             <h2>{TITLES[effectiveTab]}</h2>
           </div>
-          {effectiveTab === "dashboard" && updatedAt && (
-            <div className="updated">
-              <span className="sw" /> Atualizado às {new Date(updatedAt).toLocaleTimeString("pt-BR")}
-            </div>
-          )}
+          <div className="topbar-actions">
+            {effectiveTab === "dashboard" && updatedAt && (
+              <div className="updated">
+                <span className="sw" /> Atualizado às {new Date(updatedAt).toLocaleTimeString("pt-BR")}
+              </div>
+            )}
+            <TopbarAlerts alerts={alerts} />
+            <PlantSwitcher plants={plants} activePlantId={activePlant?.id ?? null} onSelect={setSelectedPlantId} />
+          </div>
         </div>
 
         {effectiveTab === "minhas-usinas" && (
@@ -81,7 +89,7 @@ function App() {
 
         {activePlant && effectiveTab !== "administracao" && effectiveTab !== "minha-conta" && effectiveTab !== "minhas-usinas" && (
           <PlantProvider plant={activePlant}>
-            {effectiveTab === "dashboard" && <DashboardTab onUpdatedAt={setUpdatedAt} />}
+            {effectiveTab === "dashboard" && <DashboardTab onUpdatedAt={setUpdatedAt} onAlerts={setAlerts} />}
             {effectiveTab === "historico" && <HistoricoTab />}
             {effectiveTab === "saude" && <SaudeTab />}
             {effectiveTab === "consumo" && <ConsumoTab />}

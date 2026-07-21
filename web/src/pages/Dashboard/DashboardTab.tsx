@@ -2,21 +2,21 @@ import { useEffect, useState } from "react";
 import { useActivePlant } from "../../context/PlantContext";
 import { api, type HistoryResponse, type InvertersResponse, type Summary } from "../../lib/api";
 import { fmtNum, fmtBRL } from "../../lib/fmt";
-import { computeAlerts, INV_LABELS, INV_STATUS_META } from "../../lib/alerts";
-import { AlertCenter } from "../../components/AlertCenter";
+import { computeAlerts, INV_LABELS, INV_STATUS_META, type Alert } from "../../lib/alerts";
 import { GeracaoChart } from "../../components/GeracaoChart";
 import { DayStatusCard } from "../../components/DayStatusCard";
 import { Tooltip } from "../../components/Tooltip";
 
-export function DashboardTab({ onUpdatedAt }: { onUpdatedAt: (iso: string) => void }) {
+export function DashboardTab({
+  onUpdatedAt,
+  onAlerts,
+}: {
+  onUpdatedAt: (iso: string) => void;
+  onAlerts?: (alerts: Alert[]) => void;
+}) {
   const plant = useActivePlant();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [inverters, setInverters] = useState<InvertersResponse>({});
-  const [weekHistory, setWeekHistory] = useState<HistoryResponse | null>(null);
-  const [bandeira, setBandeira] = useState<{ bandeira: string | null; bandeira_valor_kwh: number | null }>({
-    bandeira: null,
-    bandeira_valor_kwh: null,
-  });
 
   useEffect(() => {
     let cancelled = false;
@@ -31,9 +31,17 @@ export function DashboardTab({ onUpdatedAt }: { onUpdatedAt: (iso: string) => vo
       if (cancelled) return;
       setSummary(s);
       setInverters(inv);
-      setWeekHistory(wh);
-      setBandeira({ bandeira: ds.bandeira, bandeira_valor_kwh: ds.bandeira_valor_kwh });
       onUpdatedAt(s.updated_at);
+      const wAvg = wh.rows.length ? wh.total_kwh / wh.rows.length : null;
+      onAlerts?.(
+        computeAlerts({
+          inverters: inv,
+          bandeira: ds.bandeira,
+          bandeiraValorKwh: ds.bandeira_valor_kwh,
+          todayKwh: s.today_generated_kwh,
+          weekAvgKwh: wAvg,
+        }),
+      );
     }
 
     void refresh();
@@ -44,15 +52,6 @@ export function DashboardTab({ onUpdatedAt }: { onUpdatedAt: (iso: string) => vo
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plant.id]);
-
-  const weekAvgKwh = weekHistory && weekHistory.rows.length ? weekHistory.total_kwh / weekHistory.rows.length : null;
-  const alerts = computeAlerts({
-    inverters,
-    bandeira: bandeira.bandeira,
-    bandeiraValorKwh: bandeira.bandeira_valor_kwh,
-    todayKwh: summary?.today_generated_kwh ?? null,
-    weekAvgKwh,
-  });
 
   const invEntries = Object.entries(inverters);
 
@@ -105,8 +104,6 @@ export function DashboardTab({ onUpdatedAt }: { onUpdatedAt: (iso: string) => vo
           </div>
         </div>
       </div>
-
-      <AlertCenter alerts={alerts} />
 
       <div className="inv-row" style={invEntries.length === 1 ? { gridTemplateColumns: "1fr" } : undefined}>
         {invEntries.map(([inv, data]) => {

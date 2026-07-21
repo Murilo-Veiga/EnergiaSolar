@@ -112,6 +112,47 @@
   .updated { font-size: 12.5px; color: var(--ink-muted); display: flex; align-items: center; gap: 6px; }
   .updated .sw { width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
 
+  .topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  /* ---- sino de alertas no topbar ---- */
+  .bell-wrap { position: relative; }
+  .bell-btn { position: relative; background: none; border: none; padding: 0; cursor: pointer; line-height: 0; }
+  .bell-count {
+    position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; padding: 0 4px;
+    border-radius: 8px; background: var(--critical); color: #fff; font-size: 9.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .bell-dropdown {
+    position: absolute; top: calc(100% + 10px); right: 0; width: 340px; max-height: 420px; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35); padding: 12px; z-index: 60;
+  }
+  .bell-dropdown-head { font-size: 13px; font-weight: 650; color: var(--ink); margin-bottom: 10px; }
+  .bell-dropdown .alert-empty { padding: 0; }
+  .bell-dropdown .alert-item { background: var(--surface-2); }
+
+  /* ---- seletor de instalação no topbar ---- */
+  .plant-switcher { position: relative; }
+  .plant-switcher-btn {
+    display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 10px 5px 5px; font-size: 13px; font-weight: 550; color: var(--ink); cursor: pointer;
+    max-width: 200px;
+  }
+  .plant-switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plant-switcher-chevron { color: var(--ink-muted); font-size: 10px; flex-shrink: 0; }
+  .plant-switcher-dropdown {
+    position: absolute; top: calc(100% + 8px); right: 0; min-width: 220px; max-height: 320px; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35); padding: 6px; z-index: 60;
+  }
+  .plant-switcher-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+    background: none; border: none; border-radius: 7px; padding: 8px 10px; font-size: 13px; color: var(--ink);
+    text-align: left; cursor: pointer;
+  }
+  .plant-switcher-item:hover { background: var(--surface-2); }
+  .plant-switcher-item.active { color: var(--accent-blue); font-weight: 600; background: rgba(57,135,229,0.1); }
+
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 
   /* Hero row */
