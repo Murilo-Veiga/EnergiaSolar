@@ -2,7 +2,7 @@
 # Sobe api-go (api + collector) e o frontend em modo dev, SEM build de
 # imagem docker — só o Postgres roda em container "de verdade" (o mesmo do
 # docker-compose.yml). A api/collector rodam via `go run` dentro de um
-# container golang:1.23-alpine descartável, com o código-fonte montado por
+# container golang:1.24-alpine descartável, com o código-fonte montado por
 # volume (recompila na hora, sem passar pelo Dockerfile multi-stage); o
 # frontend roda com `npm run dev` (Vite) direto no host.
 #
@@ -49,7 +49,7 @@ done
 
 API_PORT="${DEV_API_PORT:-8092}"
 WEB_PORT="${DEV_WEB_PORT:-5173}"
-GO_IMAGE="golang:1.23-alpine"
+GO_IMAGE="golang:1.24-alpine"
 API_CONTAINER="solar-dev-api"
 COLLECTOR_CONTAINER="solar-dev-collector"
 
