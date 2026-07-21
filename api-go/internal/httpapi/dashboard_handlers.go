@@ -57,7 +57,7 @@ func (s *Server) yesterdayGeneratedKWh(ctx context.Context, plantID string) (*fl
 
 func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}
@@ -193,7 +193,7 @@ func (s *Server) healthStatus(ctx context.Context, plantID, inverter string) (in
 
 func (s *Server) handleInverters(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}
@@ -258,7 +258,7 @@ type collectorHealthEntry struct {
 
 func (s *Server) handleCollectorHealth(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}

@@ -261,20 +261,22 @@ export function HistoricoTab() {
         title="Anotações sobre eventos importantes"
         tooltip="Espaço pra você anotar algo que aconteceu num dia específico (uma limpeza, um reparo) e ajuda a explicar um salto no gráfico depois."
       >
-        <form className="anno-form" onSubmit={handleAnnotationSubmit}>
-          <input type="date" required value={annoDate} onChange={(e) => setAnnoDate(e.target.value)} />
-          <input
-            type="text"
-            placeholder="Ex.: limpeza dos painéis"
-            maxLength={280}
-            required
-            value={annoText}
-            onChange={(e) => setAnnoText(e.target.value)}
-          />
-          <button type="submit" className="btn-upload" disabled={submittingAnno}>
-            Salvar
-          </button>
-        </form>
+        {plant.is_owner && (
+          <form className="anno-form" onSubmit={handleAnnotationSubmit}>
+            <input type="date" required value={annoDate} onChange={(e) => setAnnoDate(e.target.value)} />
+            <input
+              type="text"
+              placeholder="Ex.: limpeza dos painéis"
+              maxLength={280}
+              required
+              value={annoText}
+              onChange={(e) => setAnnoText(e.target.value)}
+            />
+            <button type="submit" className="btn-upload" disabled={submittingAnno}>
+              Salvar
+            </button>
+          </form>
+        )}
         <div className="anno-list">
           {annotations.map((a) => (
             <div className="anno-list-item" key={a.date}>

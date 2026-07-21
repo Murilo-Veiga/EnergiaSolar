@@ -88,6 +88,15 @@ export interface Plant {
   lon: number | null;
   installed_power_kwp: number;
   timezone: string;
+  is_owner: boolean;
+}
+
+export interface PlantAccessUser {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  granted_at: string;
 }
 
 export interface InverterDeviceInfo {

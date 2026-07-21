@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, type InverterCredential, type InverterDeviceInfo, type Plant } from "../lib/api";
+import { api, ApiError, type InverterCredential, type InverterDeviceInfo, type Plant, type PlantAccessUser } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 interface Props {
@@ -23,7 +23,14 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
               className={`plant-list-item ${p.id === activePlantId ? "active" : ""}`}
               onClick={() => onSelectPlant(p.id)}
             >
-              <span>{p.name}</span>
+              <span>
+                {p.name}
+                {!p.is_owner && (
+                  <span className="badge" style={{ marginLeft: 8 }}>
+                    compartilhada
+                  </span>
+                )}
+              </span>
               <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>{p.installed_power_kwp} kWp</span>
             </div>
           ))}
@@ -34,16 +41,126 @@ export function MinhasUsinas({ plants, activePlantId, onSelectPlant }: Props) {
 
       {activePlant && (
         <>
-          <div className="admin-section">
-            <h3>Dados da instalação</h3>
-            <PlantForm plant={activePlant} onSaved={refreshPlants} onDeleted={() => { onSelectPlant(null); void refreshPlants(); }} />
-          </div>
-          <div className="admin-section">
-            <h3>Inversores da instalação</h3>
-            <CredentialsManager plantId={activePlant.id} />
-          </div>
+          {activePlant.is_owner ? (
+            <>
+              <div className="admin-section">
+                <h3>Dados da instalação</h3>
+                <PlantForm plant={activePlant} onSaved={refreshPlants} onDeleted={() => { onSelectPlant(null); void refreshPlants(); }} />
+              </div>
+              <div className="admin-section">
+                <h3>Inversores da instalação</h3>
+                <CredentialsManager plantId={activePlant.id} />
+              </div>
+              <div className="admin-section">
+                <h3>Compartilhamento</h3>
+                <PlantAccessManager plantId={activePlant.id} />
+              </div>
+            </>
+          ) : (
+            <div className="admin-section">
+              <h3>{activePlant.name}</h3>
+              <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>
+                Você tem acesso de visualização a esta instalação, concedido pelo dono — veja os dados no Dashboard.
+                Edição de dados e credenciais só pelo dono.
+              </div>
+            </div>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+function PlantAccessManager({ plantId }: { plantId: string }) {
+  const [users, setUsers] = useState<PlantAccessUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [identifier, setIdentifier] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const list = await api.get<PlantAccessUser[]>(`/api/plants/${plantId}/access`);
+      setUsers(list);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao listar acessos");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plantId]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.post(`/api/plants/${plantId}/access`, { identifier });
+      setIdentifier("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao conceder acesso");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function revoke(user: PlantAccessUser) {
+    if (!confirm(`Remover o acesso de "${user.email}" a esta instalação?`)) return;
+    try {
+      await api.delete(`/api/plants/${plantId}/access/${user.id}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao remover acesso");
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ color: "var(--ink-muted)", fontSize: 12, marginBottom: 10 }}>
+        Contas com acesso enxergam o dashboard, histórico, saúde e consumo desta instalação — somente leitura, sem
+        editar dados nem credenciais. A conta precisa já existir (criada em Administração &gt; Gestão de usuários).
+      </div>
+      {loading ? (
+        <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Carregando...</div>
+      ) : (
+        <div className="plant-list">
+          {users.map((u) => (
+            <div className="plant-list-item" key={u.id} style={{ cursor: "default" }}>
+              <span>
+                {u.email}
+                {u.username && (
+                  <span style={{ color: "var(--ink-muted)", fontSize: 12, marginLeft: 8 }}>@{u.username}</span>
+                )}
+              </span>
+              <button className="btn btn-danger" onClick={() => revoke(u)}>
+                Remover
+              </button>
+            </div>
+          ))}
+          {users.length === 0 && (
+            <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Ninguém além de você tem acesso ainda.</div>
+          )}
+        </div>
+      )}
+      <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10 }}>
+        <input
+          placeholder="E-mail ou usuário da conta"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          required
+          style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 7, padding: "8px 9px", color: "var(--ink)" }}
+        />
+        <button className="btn" type="submit" disabled={submitting}>
+          Conceder acesso
+        </button>
+        {error && <span className="auth-error">{error}</span>}
+      </form>
     </div>
   );
 }

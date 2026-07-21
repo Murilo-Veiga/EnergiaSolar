@@ -82,9 +82,19 @@ editável só por admin).
 O painel é multi-tenant: não existe cadastro público (a tela de "criar
 conta" foi removida de propósito) — um admin cria cada conta em
 Administração > Gestão de usuários, e cada conta só vê as próprias usinas
-(`plants.user_id`). Um usuário marcado como
+(`plants.user_id`) por padrão. Um usuário marcado como
 administrador (`users.is_admin`) ganha acesso a duas telas extras em
 Administração:
+
+Além disso, o dono de uma usina pode compartilhar acesso **somente leitura**
+a ela com qualquer outra conta já existente do sistema (não precisa ser
+admin), pela seção "Compartilhamento" em Minhas usinas — informando o
+e-mail ou nome de usuário de quem vai receber o acesso (tabela
+`plant_access`). Quem recebe o acesso vê dashboard, histórico, saúde e
+consumo normalmente, mas não edita dados da usina, credenciais de
+inversor, nem lança anotação/importa fatura — essas ações continuam
+exigindo ser o dono (`authorizePlant` vs. `authorizePlantView` em
+`api-go/internal/httpapi/plant_handlers.go`).
 
 - **Gestão de usuários**: CRUD completo de contas do sistema (criar,
   editar e-mail/privilégio de admin, redefinir senha de outra pessoa,
@@ -562,6 +572,8 @@ uma.
 | `GET`/`POST /api/plants/{id}/inverters-config` | Lista/cria credencial de inversor da usina |
 | `POST /api/plants/{id}/inverters-config/test` | Testa uma credencial sem gravar |
 | `PUT`/`DELETE /api/plants/{id}/inverters-config/{credID}` | Atualiza/apaga uma credencial |
+| `GET`/`POST /api/plants/{id}/access` | Lista/concede acesso somente-leitura à usina (dono) |
+| `DELETE /api/plants/{id}/access/{userID}` | Revoga o acesso de uma conta à usina (dono) |
 | `GET /api/admin/users`, `POST /api/admin/users` | Lista/cria usuários (admin) |
 | `GET`/`PUT`/`DELETE /api/admin/users/{id}` | Consulta/edita/apaga um usuário (admin) |
 | `PUT /api/admin/users/{id}/password` | Redefine a senha de um usuário (admin) |

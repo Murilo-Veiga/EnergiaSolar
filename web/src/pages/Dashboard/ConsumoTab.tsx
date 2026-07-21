@@ -72,10 +72,12 @@ export function ConsumoTab() {
           Importe o PDF da sua fatura da Celesc pra comparar o que você pagou com o que sua instalação gerou — a fatura já traz até 13
           meses de histórico de consumo, importados de uma vez só.
         </p>
-        <label className="btn-upload" style={{ cursor: uploading ? "wait" : "pointer" }}>
-          {uploading ? "Importando…" : "📄 Importar fatura (PDF)"}
-          <input type="file" accept="application/pdf" hidden disabled={uploading} onChange={handleFileChange} />
-        </label>
+        {plant.is_owner && (
+          <label className="btn-upload" style={{ cursor: uploading ? "wait" : "pointer" }}>
+            {uploading ? "Importando…" : "📄 Importar fatura (PDF)"}
+            <input type="file" accept="application/pdf" hidden disabled={uploading} onChange={handleFileChange} />
+          </label>
+        )}
       </div>
 
       {uploadError && (

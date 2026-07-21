@@ -208,7 +208,7 @@ type consumptionSummaryResponse struct {
 // Celesc, é aproximação — mesmo aviso do webapp/main.py original).
 func (s *Server) handleConsumptionSummary(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}
@@ -289,7 +289,7 @@ type consumptionHistoryRow struct {
 // (`uc` = uc_number), mais recente primeiro.
 func (s *Server) handleConsumptionHistory(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}

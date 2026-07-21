@@ -49,7 +49,7 @@ func (s *Server) periodTotalKWh(ctx context.Context, plantID string, days, start
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}
@@ -127,7 +127,7 @@ type historyRecordsResponse struct {
 
 func (s *Server) handleHistoryRecords(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}
@@ -199,7 +199,7 @@ type historyInvertersRow struct {
 // ~23:55 entra na janela e dobra a soma).
 func (s *Server) handleHistoryInverters(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}

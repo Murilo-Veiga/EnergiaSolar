@@ -68,7 +68,7 @@ type inverterCredentialResponse struct {
 // e ainda sem 1º ciclo) — POST/PUT preenchem isso na hora (ver abaixo).
 func (s *Server) handleListInverterCredentials(w http.ResponseWriter, r *http.Request) {
 	plantID := chi.URLParam(r, "plantID")
-	if _, err := s.authorizePlant(r.Context(), plantID); err != nil {
+	if _, err := s.authorizePlantView(r.Context(), plantID); err != nil {
 		respondPlantAuthError(w, err)
 		return
 	}
