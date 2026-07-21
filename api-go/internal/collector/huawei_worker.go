@@ -174,6 +174,7 @@ func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow, setting
 			}
 			return
 		}
+		reconnected := failures > 0
 		failures = 0
 		dayKWh := guard.apply(now, result.powerKW, result.dayKWh)
 
@@ -186,6 +187,10 @@ func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow, setting
 		}
 		if err := recomputePlantTotals(ctx, deps.DB, cred.PlantID, true, result.hasAlarm, result.alarmDetail); err != nil {
 			log.Error("falha ao recalcular totais da usina", "error", err)
+		}
+		if reconnected {
+			log.Info("worker voltou a coletar depois de falhas consecutivas, agendando backfill histórico")
+			signalRecoveryBackfill()
 		}
 	}
 
