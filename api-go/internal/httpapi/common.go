@@ -106,10 +106,6 @@ func daysForRange(r string) int {
 	return 30
 }
 
-// commTimeoutMinutes espelha COMM_TIMEOUT_MINUTES em webapp/main.py — 3x o
-// intervalo de coleta (hoje 300s no Python; 30min no collector-go da Fase 4).
-const commTimeoutMinutes = 15
-
 // enabledInverters lista as marcas (huawei/foxess) habilitadas pra uma
 // usina — substitui o ENABLED_INVERTERS calculado a partir de
 // HUAWEI_ENABLED/FOXESS_ENABLED (env vars fixas) no Python: agora cada

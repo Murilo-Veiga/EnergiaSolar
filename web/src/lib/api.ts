@@ -136,6 +136,7 @@ export interface InverterEntry {
   day_kwh: number | null;
   temperature_c: number | null;
   status: InverterStatus;
+  last_online_at: string | null;
   consecutive_failures: number;
   last_error: string | null;
 }

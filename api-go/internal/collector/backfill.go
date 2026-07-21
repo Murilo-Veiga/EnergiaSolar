@@ -58,6 +58,130 @@ func DebugHuaweiKpiStationDay(ctx context.Context, deps Deps, credentialID strin
 	return client.GetKpiStationDay(ctx, *cred.DiscoveredStationCode, time.Now().UnixMilli())
 }
 
+// DebugFoxessDeviceList chama device/list pra 1 credencial FoxESS e devolve
+// a resposta CRUA (todos os campos de cada device, não só deviceSN) — usado
+// só pra checar se a API expõe um campo de status/conectividade nativo que
+// hoje o worker ignora (ver cmd/backfill-history -debug-foxess-devicelist).
+func DebugFoxessDeviceList(ctx context.Context, deps Deps, credentialID string) ([]map[string]any, error) {
+	rows, err := FetchEnabledCredentials(ctx, deps.DB)
+	if err != nil {
+		return nil, err
+	}
+	var cred CredentialRow
+	found := false
+	for _, c := range rows {
+		if c.ID == credentialID {
+			cred = c
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("credencial %s não encontrada (ou não habilitada)", credentialID)
+	}
+	settings, err := loadSystemSettings(ctx, deps.DB)
+	if err != nil {
+		return nil, err
+	}
+	var secrets foxessSecrets
+	if err := decryptJSON(cred.CredentialsEncrypted, deps.EncryptionKey, &secrets); err != nil {
+		return nil, err
+	}
+	baseURL := secrets.BaseURL
+	if baseURL == "" {
+		baseURL = settings.FoxessBaseURL
+	}
+	client := foxess.NewClient(secrets.APIKey, baseURL)
+	return client.GetDeviceList(ctx)
+}
+
+// DebugFoxessRealQuery chama device/real/query pra 1 credencial FoxESS e
+// devolve a resposta CRUA (todos os campos de cada item de "datas", não só
+// variable/value) — debug temporário pra checar se existe timestamp por
+// variável.
+func DebugFoxessRealQuery(ctx context.Context, deps Deps, credentialID string) ([]map[string]any, error) {
+	rows, err := FetchEnabledCredentials(ctx, deps.DB)
+	if err != nil {
+		return nil, err
+	}
+	var cred CredentialRow
+	found := false
+	for _, c := range rows {
+		if c.ID == credentialID {
+			cred = c
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("credencial %s não encontrada (ou não habilitada)", credentialID)
+	}
+	if cred.DiscoveredDeviceSN == nil {
+		return nil, fmt.Errorf("device_sn ainda não descoberto")
+	}
+	settings, err := loadSystemSettings(ctx, deps.DB)
+	if err != nil {
+		return nil, err
+	}
+	var secrets foxessSecrets
+	if err := decryptJSON(cred.CredentialsEncrypted, deps.EncryptionKey, &secrets); err != nil {
+		return nil, err
+	}
+	baseURL := secrets.BaseURL
+	if baseURL == "" {
+		baseURL = settings.FoxessBaseURL
+	}
+	client := foxess.NewClient(secrets.APIKey, baseURL)
+	return client.GetRealQuery(ctx, *cred.DiscoveredDeviceSN, []string{"generationPower", "todayYield", "invTemperation"})
+}
+
+// DebugHuaweiDevRealKpi chama getDevRealKpi pra 1 credencial Huawei e
+// devolve a resposta CRUA (inclusive dataItemMap inteiro, não só
+// active_power/temperature/day_cap) — usado só pra checar se a API expõe
+// run_state (ou campo equivalente) que hoje o worker ignora (ver
+// cmd/backfill-history -debug-huawei-devrealkpi).
+func DebugHuaweiDevRealKpi(ctx context.Context, deps Deps, credentialID string) ([]map[string]any, error) {
+	rows, err := FetchEnabledCredentials(ctx, deps.DB)
+	if err != nil {
+		return nil, err
+	}
+	var cred CredentialRow
+	found := false
+	for _, c := range rows {
+		if c.ID == credentialID {
+			cred = c
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("credencial %s não encontrada (ou não habilitada)", credentialID)
+	}
+	if cred.DiscoveredDevDn == nil {
+		return nil, fmt.Errorf("dev_dn ainda não descoberto")
+	}
+	settings, err := loadSystemSettings(ctx, deps.DB)
+	if err != nil {
+		return nil, err
+	}
+	var secrets huaweiSecrets
+	if err := decryptJSON(cred.CredentialsEncrypted, deps.EncryptionKey, &secrets); err != nil {
+		return nil, err
+	}
+	baseURL := secrets.BaseURL
+	if baseURL == "" {
+		baseURL = settings.HuaweiBaseURL
+	}
+	client, err := huawei.NewClient(secrets.Username, secrets.SystemCode, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.Login(ctx); err != nil {
+		return nil, fmt.Errorf("login: %w", err)
+	}
+	return client.GetDevRealKpi(ctx, *cred.DiscoveredDevDn, huawei.DevTypeID)
+}
+
 // BackfillOptions parametriza uma execução de RunHistoryBackfill.
 type BackfillOptions struct {
 	// Days é quantos dias PASSADOS (sem contar hoje — hoje já é coberto

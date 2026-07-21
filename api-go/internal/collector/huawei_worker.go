@@ -50,6 +50,8 @@ type huaweiPollResult struct {
 	temperatureC *float64
 	hasAlarm     bool
 	alarmDetail  *string
+	online       bool
+	lastOnlineAt *time.Time
 }
 
 // pollHuawei é a porta de _collect_huawei em collector/main.py (Python).
@@ -94,12 +96,29 @@ func pollHuawei(ctx context.Context, client *huawei.Client, stationCode, devDn s
 		dayKWh = floatFromMap(stationKpi, "day_power")
 	}
 
+	// online vem do campo nativo "run_state" de getDevRealKpi (0=offline,
+	// 1=conectado/on-grid — confirmado contra a API real, ver
+	// cmd/backfill-history -debug-huawei-devrealkpi), não de um timeout de
+	// coleta. Quando offline, "close_time" (epoch ms) é o momento real da
+	// última desconexão — usamos como last_online_at.
+	online := floatFromMap(devKpi, "run_state") == 1
+	var lastOnlineAt *time.Time
+	if online {
+		now := time.Now()
+		lastOnlineAt = &now
+	} else if closeMs := floatFromMap(devKpi, "close_time"); closeMs > 0 {
+		t := time.UnixMilli(int64(closeMs))
+		lastOnlineAt = &t
+	}
+
 	return huaweiPollResult{
 		powerKW:      floatFromMap(devKpi, "active_power"),
 		dayKWh:       dayKWh,
 		temperatureC: floatPtrFromMap(devKpi, "temperature"),
 		hasAlarm:     len(alarms) > 0,
 		alarmDetail:  extractAlarmDetail(alarms),
+		online:       online,
+		lastOnlineAt: lastOnlineAt,
 	}, nil
 }
 
@@ -158,7 +177,7 @@ func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow, setting
 		failures = 0
 		dayKWh := guard.apply(now, result.powerKW, result.dayKWh)
 
-		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "huawei", result.powerKW, dayKWh, result.temperatureC); err != nil {
+		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "huawei", result.powerKW, dayKWh, result.temperatureC, result.online, result.lastOnlineAt); err != nil {
 			log.Error("falha ao gravar inverter_status", "error", err)
 			return
 		}

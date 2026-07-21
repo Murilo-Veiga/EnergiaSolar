@@ -9,7 +9,6 @@ export interface Alert {
   desc: string;
 }
 
-const COMM_TIMEOUT_MIN = 15;
 const TEMP_THRESHOLD_C = 65; // ILUSTRATIVO — não validado na doc dos fabricantes.
 const GERACAO_ABAIXO_MEDIA_PCT = 10;
 const API_FAILURE_ALERT_THRESHOLD = 2;
@@ -26,7 +25,7 @@ export const INV_STATUS_META: Record<string, { cls: string; label: string; tip: 
   sem_comunicacao: {
     cls: "st-critical",
     label: "Sem comunicação",
-    tip: `Sem resposta da API há mais de ${COMM_TIMEOUT_MIN} min (3 ciclos de coleta) — pode indicar queda de energia, Wi-Fi ou disjuntor.`,
+    tip: "O inversor reporta status offline direto na API do fabricante — pode indicar queda de energia, Wi-Fi ou disjuntor.",
   },
 };
 

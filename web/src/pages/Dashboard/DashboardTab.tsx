@@ -123,7 +123,11 @@ export function DashboardTab({
               </div>
               <div className="inv-body">
                 <div>
-                  <div className="model" />
+                  <div className="model">
+                    {data.status === "sem_comunicacao" && data.last_online_at
+                      ? `Online até ${new Date(data.last_online_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                      : ""}
+                  </div>
                   <div className="temp">{data.temperature_c !== null && data.temperature_c !== undefined ? `${fmtNum(data.temperature_c, 0)}°C` : "--"}</div>
                 </div>
                 <div className="inv-vals">
