@@ -47,6 +47,9 @@ func main() {
 	write := flag.Bool("write", false, "grava de verdade em inverter_status/daily_generation (default: dry-run, só imprime)")
 	plantID := flag.String("plant", "", "filtra por 1 usina (plant_id); vazio = todas")
 	debugHuawei := flag.String("debug-huawei", "", "não roda o backfill — só imprime a resposta CRUA de getKpiStationDay pra essa credential_id, pra conferir o nome real dos campos")
+	debugFoxessDeviceList := flag.String("debug-foxess-devicelist", "", "não roda o backfill — só imprime a resposta CRUA de device/list pra essa credential_id (FoxESS), pra checar se existe campo de status nativo")
+	debugFoxessRealQuery := flag.String("debug-foxess-realquery", "", "não roda o backfill — só imprime a resposta CRUA de device/real/query pra essa credential_id (FoxESS), pra checar se existe timestamp por variável")
+	debugHuaweiDevRealKpi := flag.String("debug-huawei-devrealkpi", "", "não roda o backfill — só imprime a resposta CRUA de getDevRealKpi pra essa credential_id (Huawei), pra checar se existe run_state ou equivalente")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -72,6 +75,39 @@ func main() {
 
 	if *debugHuawei != "" {
 		entries, err := collector.DebugHuaweiKpiStationDay(ctx, deps, *debugHuawei)
+		if err != nil {
+			log.Error("debug falhou", "error", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(entries, "", "  ")
+		fmt.Println(string(out))
+		return
+	}
+
+	if *debugFoxessDeviceList != "" {
+		entries, err := collector.DebugFoxessDeviceList(ctx, deps, *debugFoxessDeviceList)
+		if err != nil {
+			log.Error("debug falhou", "error", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(entries, "", "  ")
+		fmt.Println(string(out))
+		return
+	}
+
+	if *debugFoxessRealQuery != "" {
+		entries, err := collector.DebugFoxessRealQuery(ctx, deps, *debugFoxessRealQuery)
+		if err != nil {
+			log.Error("debug falhou", "error", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(entries, "", "  ")
+		fmt.Println(string(out))
+		return
+	}
+
+	if *debugHuaweiDevRealKpi != "" {
+		entries, err := collector.DebugHuaweiDevRealKpi(ctx, deps, *debugHuaweiDevRealKpi)
 		if err != nil {
 			log.Error("debug falhou", "error", err)
 			os.Exit(1)

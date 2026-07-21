@@ -14,16 +14,24 @@ import (
 	"github.com/ledongthuc/pdf"
 )
 
+// A extração de texto do PDF (github.com/ledongthuc/pdf) NÃO preserva a
+// ordem de leitura visual de um layout em colunas — cada valor de uma
+// "linha" da fatura normalmente vira 1 linha de texto por célula, e alguns
+// pares rótulo/valor saem invertidos e colados (ex.: "63716073Cliente:",
+// "MARCOS EDUARDO ENDLERNOME:"). Por isso quase todo campo aqui é
+// reconhecido por uma SEQUÊNCIA de linhas consecutivas (lookahead por
+// índice) em vez de 1 regex por linha só — confirmado contra uma fatura
+// real (ver cmd/debug-celesc-pdf).
 var (
-	referenciaLineRe = regexp.MustCompile(`^(\d{2})/(\d{4})\s+(\d{2}/\d{2}/\d{4})\s+R\$\s+([\d.,]+)$`)
-	nomeLineRe       = regexp.MustCompile(`^NOME:\s*(.+)$`)
-	diasLineRe       = regexp.MustCompile(`^\d{2}/\d{2}/\d{4}\s+\d{2}/\d{2}/\d{4}\s+(\d+)\s+\d{2}/\d{2}/\d{4}$`)
-	medidorLineRe    = regexp.MustCompile(`Energia\s+Único\s+[\d.]+\s+[\d.]+\s+[\d,]+\s+[\d,]+\s+(\d+)`)
-	bandeiraLineRe   = regexp.MustCompile(`^(Verde|Amarela|Vermelha ?\d?)\s+R\$\s+([\d,]+)\s+\d+$`)
-	monthLabelRe     = regexp.MustCompile(`^([A-Z]{3})/(\d{2})$`)
-	conGtpPairRe     = regexp.MustCompile(`^(\d+)\s+(\d+)$`)
-	novoFormatoUCRe  = regexp.MustCompile(`passará a ser\s+([\d.\-]+)`)
-	nonDigitRe       = regexp.MustCompile(`\D`)
+	nomeLineRe          = regexp.MustCompile(`^(.+)NOME:$`)
+	referenciaMesAnoRe  = regexp.MustCompile(`^(\d{2})/(\d{4})$`)
+	dateOnlyRe          = regexp.MustCompile(`^\d{2}/\d{2}/\d{4}$`)
+	totalValueRe        = regexp.MustCompile(`^([\d.,]+)\s*R\$$`)
+	integerLineRe       = regexp.MustCompile(`^(\d+)$`)
+	bandeiraLineRe      = regexp.MustCompile(`^(Verde|Amarela|Vermelha ?\d?)\s+R\$\s+([\d,]+)$`)
+	monthLabelRe        = regexp.MustCompile(`^([A-Z]{3})/(\d{2})$`)
+	novoFormatoUCRe     = regexp.MustCompile(`passará a ser\s+([\d.\-]+)`)
+	nonDigitRe          = regexp.MustCompile(`\D`)
 
 	monthAbbr = map[string]int{
 		"JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6,
@@ -41,8 +49,8 @@ func (e *ParseError) Error() string { return e.msg }
 // própria fatura (coluna CON) — permite importar até 13 meses de uma vez
 // só, sem precisar de 1 upload por mês.
 type HistoricoMes struct {
-	Ano       int
-	Mes       int
+	Ano        int
+	Mes        int
 	ConsumoKWh int
 }
 
@@ -68,12 +76,14 @@ func brlToFloat(s string) (float64, error) {
 }
 
 // findUC procura a UC exibida no topo da fatura — a linha imediatamente
-// anterior a "Cliente: ...". Faturas em transição pro novo formato da
-// ANEEL (REN 1095/2024) ainda mostram a UC antiga aqui — ver
-// findUCNovoFormato, que tem prioridade quando presente.
+// anterior à que contém "Cliente:" (o rótulo sai colado DEPOIS do valor na
+// extração real, ex. "63716073Cliente:", por isso Contains em vez de
+// HasPrefix). Faturas em transição pro novo formato da ANEEL (REN
+// 1095/2024) ainda mostram a UC antiga aqui — ver findUCNovoFormato, que
+// tem prioridade quando presente.
 func findUC(lines []string) string {
 	for i, line := range lines {
-		if strings.HasPrefix(line, "Cliente:") && i > 0 {
+		if strings.Contains(line, "Cliente:") && i > 0 {
 			digits := nonDigitRe.ReplaceAllString(strings.TrimSpace(lines[i-1]), "")
 			if digits != "" {
 				return digits
@@ -139,12 +149,13 @@ func parseHistorico(lines []string) []HistoricoMes {
 		return nil
 	}
 
-	// Depois dos labels vem a tabela de leitura do medidor (2 linhas) e só
-	// então o cabeçalho "CON GTP" com 1 par de números por mês, na mesma
-	// ordem dos labels.
+	// Depois dos labels vem a tabela de leitura do medidor e só então o
+	// cabeçalho "CON"/"GTP" (2 linhas separadas, não "CON GTP" numa linha
+	// só) com 2 números por mês (consumo, geração injetada), cada 1 na sua
+	// própria linha, na mesma ordem dos labels.
 	headerIdx := -1
-	for j := i; j < len(lines); j++ {
-		if strings.HasPrefix(lines[j], "CON") {
+	for j := i; j < len(lines)-1; j++ {
+		if lines[j] == "CON" && lines[j+1] == "GTP" {
 			headerIdx = j
 			break
 		}
@@ -155,15 +166,11 @@ func parseHistorico(lines []string) []HistoricoMes {
 
 	var historico []HistoricoMes
 	for k, mo := range months {
-		lineIdx := headerIdx + 1 + k
-		if lineIdx >= len(lines) {
+		conIdx := headerIdx + 2 + k*2
+		if conIdx >= len(lines) {
 			return nil
 		}
-		pair := conGtpPairRe.FindStringSubmatch(lines[lineIdx])
-		if pair == nil {
-			return nil
-		}
-		kwh, err := strconv.Atoi(pair[1])
+		kwh, err := strconv.Atoi(lines[conIdx])
 		if err != nil {
 			return nil
 		}
@@ -198,48 +205,71 @@ func ParseBillText(text string) (ParsedBill, error) {
 	haveReferencia := false
 	haveConsumo := false
 
-	for _, line := range lines {
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
 		if bill.Titular == "" {
 			if m := nomeLineRe.FindStringSubmatch(line); m != nil {
 				bill.Titular = strings.TrimSpace(m[1])
 				continue
 			}
 		}
+
+		// Referência/vencimento/total: 3 linhas seguidas — "MM/AAAA",
+		// "DD/MM/AAAA", "<valor> R$" (valor antes do símbolo, invertido).
 		if !haveReferencia {
-			if m := referenciaLineRe.FindStringSubmatch(line); m != nil {
-				mes, _ := strconv.Atoi(m[1])
-				ano, _ := strconv.Atoi(m[2])
-				total, err := brlToFloat(m[4])
-				if err != nil {
-					return ParsedBill{}, &ParseError{"total a pagar em formato inválido"}
+			if m := referenciaMesAnoRe.FindStringSubmatch(line); m != nil && i+2 < len(lines) &&
+				dateOnlyRe.MatchString(lines[i+1]) {
+				if tm := totalValueRe.FindStringSubmatch(lines[i+2]); tm != nil {
+					total, err := brlToFloat(tm[1])
+					if err != nil {
+						return ParsedBill{}, &ParseError{"total a pagar em formato inválido"}
+					}
+					mes, _ := strconv.Atoi(m[1])
+					ano, _ := strconv.Atoi(m[2])
+					bill.ReferenciaMes = mes
+					bill.ReferenciaAno = ano
+					bill.Vencimento = lines[i+1]
+					bill.TotalPagarBRL = total
+					haveReferencia = true
+					i += 2
+					continue
 				}
-				bill.ReferenciaMes = mes
-				bill.ReferenciaAno = ano
-				bill.Vencimento = m[3]
-				bill.TotalPagarBRL = total
-				haveReferencia = true
-				continue
 			}
 		}
+
+		// Dias faturados: 4 linhas seguidas — data, data, dias (inteiro
+		// puro), data (leitura anterior, leitura atual, dias, próxima
+		// leitura).
 		if bill.DiasFaturados == nil {
-			if m := diasLineRe.FindStringSubmatch(line); m != nil {
-				dias, err := strconv.Atoi(m[1])
+			if dateOnlyRe.MatchString(line) && i+3 < len(lines) &&
+				dateOnlyRe.MatchString(lines[i+1]) &&
+				integerLineRe.MatchString(lines[i+2]) &&
+				dateOnlyRe.MatchString(lines[i+3]) {
+				dias, err := strconv.Atoi(lines[i+2])
 				if err == nil {
 					bill.DiasFaturados = &dias
 				}
+				i += 3
 				continue
 			}
 		}
+
+		// Consumo: linha exata "Energia" (não "Energia injetada") seguida
+		// de "Único", depois 5 números — leitura anterior, leitura atual,
+		// constante, perdas(%), total apurado (o que queremos, o último).
 		if !haveConsumo {
-			if m := medidorLineRe.FindStringSubmatch(line); m != nil {
-				kwh, err := strconv.ParseFloat(m[1], 64)
+			if line == "Energia" && i+6 < len(lines) && lines[i+1] == "Único" {
+				kwh, err := strconv.ParseFloat(lines[i+6], 64)
 				if err == nil {
 					bill.ConsumoKWh = kwh
 					haveConsumo = true
 				}
+				i += 6
 				continue
 			}
 		}
+
 		if bill.Bandeira == nil {
 			if m := bandeiraLineRe.FindStringSubmatch(line); m != nil {
 				bandeira := m[1]
@@ -268,12 +298,37 @@ func ParseBillText(text string) (ParsedBill, error) {
 	return bill, nil
 }
 
-// ParseBill extrai o texto de um PDF (via github.com/ledongthuc/pdf, puro
-// Go/sem cgo) e delega a extração de campos pra ParseBillText.
-func ParseBill(pdfBytes []byte) (ParsedBill, error) {
+// trimAfterLastEOF corta qualquer byte depois do marcador "%%EOF" final do
+// PDF. Alguns geradores (inclusive o da Celesc) deixam espaço em
+// branco/quebra de linha ou até uma revisão incremental extra depois do
+// %%EOF real — o parser da ledongthuc/pdf só procura esse marcador numa
+// janela fixa perto do fim do arquivo e falha com "missing %%EOF" quando
+// esse lixo extra empurra o marcador real pra fora dessa janela. Cortar até
+// o último %%EOF é inofensivo pra PDFs que já terminam nele.
+func trimAfterLastEOF(b []byte) []byte {
+	marker := []byte("%%EOF")
+	idx := bytes.LastIndex(b, marker)
+	if idx == -1 {
+		return b
+	}
+	end := idx + len(marker)
+	if end >= len(b) {
+		return b
+	}
+	return b[:end]
+}
+
+// ExtractText abre o PDF (via github.com/ledongthuc/pdf, puro Go/sem cgo) e
+// devolve o texto puro extraído, sem tentar reconhecer nenhum campo — usado
+// por ParseBill e também como debug isolado (ver cmd/debug-celesc-pdf)
+// quando o texto extraído não bate com o que as regexes de ParseBillText
+// esperam (a ordem de leitura de um PDF real com layout em colunas pode
+// diferir do texto "arrumado" usado nos testes).
+func ExtractText(pdfBytes []byte) (string, error) {
+	pdfBytes = trimAfterLastEOF(pdfBytes)
 	reader, err := pdf.NewReader(bytes.NewReader(pdfBytes), int64(len(pdfBytes)))
 	if err != nil {
-		return ParsedBill{}, fmt.Errorf("falha ao abrir PDF: %w", err)
+		return "", fmt.Errorf("falha ao abrir PDF: %w", err)
 	}
 
 	var sb strings.Builder
@@ -291,7 +346,17 @@ func ParseBill(pdfBytes []byte) (ParsedBill, error) {
 		sb.WriteString("\n")
 	}
 	if sb.Len() == 0 {
-		return ParsedBill{}, &ParseError{"não foi possível extrair texto do PDF"}
+		return "", &ParseError{"não foi possível extrair texto do PDF"}
 	}
-	return ParseBillText(sb.String())
+	return sb.String(), nil
+}
+
+// ParseBill extrai o texto de um PDF e delega a extração de campos pra
+// ParseBillText.
+func ParseBill(pdfBytes []byte) (ParsedBill, error) {
+	text, err := ExtractText(pdfBytes)
+	if err != nil {
+		return ParsedBill{}, err
+	}
+	return ParseBillText(text)
 }

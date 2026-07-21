@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type DayStatus, type ForecastDay } from "../lib/api";
+import { api, type ForecastDay } from "../lib/api";
 import { fmtNum } from "../lib/fmt";
 import { IconBadge } from "./icons";
 
@@ -11,7 +11,7 @@ const radiationMeterPct = (mj: number) => Math.max(4, Math.min(100, Math.round((
 
 function renderCloudSparklinePath(cloudcover: number[], sunriseHHMM: string, sunsetHHMM: string) {
   const w = 900;
-  const h = 60;
+  const h = 38;
   const n = cloudcover.length;
   const stepX = w / n;
   const sunriseH = parseInt(sunriseHHMM.slice(0, 2), 10) + parseInt(sunriseHHMM.slice(3, 5), 10) / 60;
@@ -40,22 +40,17 @@ function renderCloudSparklinePath(cloudcover: number[], sunriseHHMM: string, sun
 }
 
 export function DayStatusCard({ plantId }: { plantId: string }) {
-  const [dayStatus, setDayStatus] = useState<DayStatus | null>(null);
   const [forecast, setForecast] = useState<ForecastDay[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [ds, fc] = await Promise.all([
-        api.get<DayStatus>(`/api/plants/${plantId}/day-status`),
-        api.get<ForecastDay[]>(`/api/plants/${plantId}/forecast`),
-      ]);
+      const fc = await api.get<ForecastDay[]>(`/api/plants/${plantId}/forecast`);
       if (cancelled) return;
-      setDayStatus(ds);
       setForecast(fc);
     }
     void load();
-    const id = setInterval(load, 30_000);
+    const id = setInterval(load, 30 * 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -67,57 +62,8 @@ export function DayStatusCard({ plantId }: { plantId: string }) {
   return (
     <div className="card day-card">
       <div className="head">
-        <h3>Status do dia</h3>
-        <span className="date">{dayStatus?.date ?? "--"}</span>
-      </div>
-      <div className="day-grid">
-        <div>
-          <div className="l">Situação</div>
-          {dayStatus?.has_alarm === null || dayStatus?.has_alarm === undefined ? (
-            <span className="status-pill">
-              <span className="sw" style={{ background: "var(--ink-muted)" }} />
-              <span className="label">--</span>
-            </span>
-          ) : dayStatus.has_alarm ? (
-            <span className="status-pill">
-              <span className="sw" style={{ background: "var(--critical)" }} />
-              <span className="label">Alerta</span>
-            </span>
-          ) : (
-            <span className="status-pill">
-              <span className="sw" style={{ background: "var(--good)" }} />
-              <span className="label">Ok</span>
-            </span>
-          )}
-          <div style={{ fontSize: 10.5, color: "var(--ink-muted)", marginTop: 4 }}>
-            {dayStatus?.has_alarm ? dayStatus.alarm_detail || "Alarme ativo" : dayStatus && !dayStatus.has_alarm ? "Nenhum alarme ativo" : ""}
-          </div>
-        </div>
-        <div>
-          <div className="l">Gerado hoje</div>
-          <div className="v">
-            {dayStatus?.generated_kwh !== null && dayStatus?.generated_kwh !== undefined ? (
-              <>
-                {fmtNum(dayStatus.generated_kwh)} <span style={{ fontSize: 11, color: "var(--ink-muted)", fontFamily: "var(--font-ui)" }}>kWh</span>
-              </>
-            ) : (
-              "--"
-            )}
-          </div>
-        </div>
-        {dayStatus?.bandeira && (
-          <div>
-            <div className="l">Bandeira</div>
-            <div className="v tt">
-              <span className={`flag-dot ${dayStatus.bandeira.split(" ")[0].toLowerCase()}`} /> <span>{dayStatus.bandeira}</span>
-              <span className="tip">
-                {dayStatus.bandeira_valor_kwh !== null && dayStatus.bandeira_valor_kwh !== undefined
-                  ? `R$ ${fmtNum(dayStatus.bandeira_valor_kwh, 5).replace(".", ",")}/kWh de acréscimo nessa bandeira`
-                  : ""}
-              </span>
-            </div>
-          </div>
-        )}
+        <h3>Previsão do tempo</h3>
+        <span className="date">{today?.date ?? "--"}</span>
       </div>
 
       {forecast && (
@@ -144,7 +90,12 @@ export function DayStatusCard({ plantId }: { plantId: string }) {
                   <div className="rad">
                     {fmtNum(d.solar_radiation_mj_m2)} <span className="unit">MJ/m²</span>
                     <div className="rad-meter">
-                      <i style={{ width: `${radiationMeterPct(d.solar_radiation_mj_m2)}%` }} />
+                      <i
+                        style={{
+                          width: `${radiationMeterPct(d.solar_radiation_mj_m2)}%`,
+                          ["--rad-color" as string]: color === "gold" ? "var(--warning)" : "var(--accent-blue)",
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="t">

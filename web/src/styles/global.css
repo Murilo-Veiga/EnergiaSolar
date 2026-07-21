@@ -305,13 +305,13 @@
   .status-pill .sw { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 
   /* Status do dia — cartão único (fatos da usina + linha do tempo do clima) */
-  .day-card { padding: 18px 20px; }
-  .day-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-  .day-card h3 { font-size: 13px; font-weight: 600; margin: 0; color: var(--ink-2); }
-  .day-card .date { font-size: 12px; color: var(--ink-muted); }
-  .day-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 14px; }
-  .day-grid .l { font-size: 11px; color: var(--ink-muted); margin-bottom: 4px; }
-  .day-grid .v { font-size: 15px; font-weight: 600; font-family: var(--font-data); }
+  .day-card { padding: 16px 18px; }
+  .day-card .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .day-card h3 { font-size: 13px; font-weight: 650; margin: 0; color: var(--ink-2); letter-spacing: -.005em; }
+  .day-card .date { font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .day-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 12px; }
+  .day-grid .l { font-size: 10.5px; color: var(--ink-muted); margin-bottom: 3px; }
+  .day-grid .v { font-size: 14px; font-weight: 600; font-family: var(--font-data); }
   .day-grid .aux { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 3px; font-family: var(--font-data); }
   @media (max-width: 860px) {
     /* Mesmo problema do .hero-row/.inv-row: colunas de largura fixa
@@ -321,10 +321,12 @@
   }
   .hero-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .hero-line .aux { font-size: 12.5px; color: var(--ink-muted); }
-  .sparkline-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .sparkline-box {
+    margin-top: 12px; padding: 10px 12px 8px; border-radius: 9px; background: var(--surface-2);
+  }
   .sparkline-box[hidden] { display: none; }
-  .sparkline-label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 8px; }
-  .sparkline-caption { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 4px; }
+  .sparkline-label { font-size: 9.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; margin-bottom: 7px; }
+  .sparkline-caption { display: flex; justify-content: space-between; font-size: 9px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 4px; }
 
   /* ---- selo "novo" — regra do projeto: toda aba/menu/seção nova fica com
      esse selo por NEW_FEATURE_DAYS (ver JS), depois some sozinho ---- */
@@ -338,32 +340,38 @@
      "hoje" usa o clima recalculado só nas horas de sol (ver README), os
      outros usam o resumo bruto do dia inteiro; o destaque visual deixa essa
      diferença de fonte visível em vez de escondida. */
-  .day-timeline { display: flex; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
-  .tl-day { flex: 1; text-align: center; background: var(--surface-2); border-radius: 8px; padding: 12px 8px 10px; display: flex; flex-direction: column; border: 1px solid transparent; position: relative; }
+  .day-timeline { display: flex; gap: 8px; }
+  .tl-day {
+    flex: 1; text-align: center; background: var(--surface-2); border-radius: 10px; padding: 9px 6px 8px;
+    display: flex; flex-direction: column; border: 1px solid transparent; position: relative;
+    transition: background-color .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+  }
+  .tl-day:hover { background: var(--surface-3); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.18); }
 
   @media (max-width: 860px) {
     /* 5 cartões com flex:1 espremem demais numa tela de celular — vira
        carrossel horizontal (scroll + snap) em vez de cortar o último
        cartão fora da tela. */
     .day-timeline { overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
-    .tl-day { flex: 0 0 104px; scroll-snap-align: start; }
+    .tl-day { flex: 0 0 96px; scroll-snap-align: start; }
   }
-  .tl-day.today { background: var(--surface-3); border-color: var(--accent-blue); }
+  .tl-day.today { background: var(--surface-3); border-color: var(--accent-blue); box-shadow: 0 0 0 1px rgba(57,135,229,.12), 0 4px 16px rgba(57,135,229,.1); }
+  .tl-day.today:hover { transform: none; }
   .tl-day.today::before {
-    content: "HOJE"; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
-    background: var(--accent-blue); color: #fff; font-size: 8.5px; font-weight: 700; letter-spacing: .04em;
-    padding: 2px 7px; border-radius: 5px;
+    content: "HOJE"; position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+    background: var(--accent-blue); color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .04em;
+    padding: 1.5px 6px; border-radius: 5px; box-shadow: 0 2px 6px rgba(57,135,229,.35);
   }
-  .tl-day .d { font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
-  .tl-day .icon-badge { margin: 7px auto 5px; }
-  .tl-day .cond { font-size: 10px; color: var(--ink-2); line-height: 1.25; min-height: 25px; padding: 0 2px; }
-  .tl-day .sun-note { font-size: 9px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 2px; }
-  .tl-day .fc-stats { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; display: flex; flex-direction: column; gap: 4px; }
-  .tl-day .rad { font-size: 10px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
-  .tl-day .rad .unit { font-size: 8px; color: var(--ink-muted); }
+  .tl-day .d { font-size: 10px; color: var(--ink-muted); font-weight: 550; text-transform: uppercase; letter-spacing: .03em; }
+  .tl-day .icon-badge { margin: 5px auto 4px; transform: scale(.92); }
+  .tl-day .cond { font-size: 9.5px; color: var(--ink-2); line-height: 1.2; min-height: 22px; padding: 0 2px; }
+  .tl-day .sun-note { font-size: 8.5px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 1px; }
+  .tl-day .fc-stats { border-top: 1px solid var(--border); margin-top: 7px; padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .tl-day .rad { font-size: 9.5px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .tl-day .rad .unit { font-size: 7.5px; color: var(--ink-muted); }
   .tl-day .rad-meter { height: 3px; background: var(--surface); border-radius: 2px; overflow: hidden; margin: 3px 1px 0; }
-  .tl-day .rad-meter i { display: block; height: 100%; background: var(--ink-muted); border-radius: 2px; }
-  .tl-day .t { font-size: 12px; color: var(--ink-2); font-weight: 650; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .tl-day .rad-meter i { display: block; height: 100%; border-radius: 2px; background: var(--rad-color, var(--ink-muted)); }
+  .tl-day .t { font-size: 12px; color: var(--ink-2); font-weight: 700; font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 
   /* Histórico table */
   .hist-table { width: 100%; border-collapse: collapse; }

@@ -136,6 +136,7 @@ export interface InverterEntry {
   day_kwh: number | null;
   temperature_c: number | null;
   status: InverterStatus;
+  last_online_at: string | null;
   consecutive_failures: number;
   last_error: string | null;
 }
@@ -182,20 +183,6 @@ export interface Annotation {
   note: string;
 }
 
-export interface DayStatus {
-  date: string | null;
-  generated_kwh: number | null;
-  weather: string;
-  weather_daylight?: string;
-  solar_radiation_mj_m2: number;
-  cloudcover_hourly?: number[];
-  sunrise: string;
-  sunset: string;
-  has_alarm: boolean | null;
-  alarm_detail: string | null;
-  bandeira: string | null;
-  bandeira_valor_kwh: number | null;
-}
 
 export interface ConsumptionUploadResult {
   uc: string;

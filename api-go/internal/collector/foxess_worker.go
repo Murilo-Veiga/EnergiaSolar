@@ -33,7 +33,14 @@ type foxessPollResult struct {
 	powerKW      float64
 	dayKWh       float64
 	temperatureC *float64
+	online       bool
+	lastOnlineAt *time.Time
 }
+
+// foxessTimeLayout é o formato do campo "time" de device/real/query, ex.
+// "2026-07-20 18:00:44 BRT-0300" — o offset numérico é o que importa pro
+// parse, o nome do fuso (BRT) é só decorativo e ignorado pelo Go.
+const foxessTimeLayout = "2006-01-02 15:04:05 MST-0700"
 
 // pollFoxess é a porta de _collect_foxess em collector/main.py (Python).
 //
@@ -42,7 +49,31 @@ type foxessPollResult struct {
 // nesta primeira versão — só o ponto instantâneo a cada ciclo (30min),
 // igual ao que a Huawei já tem. Fica como pendência se a curva mais fina
 // da FoxESS fizer falta (ver README > "Limitações conhecidas").
+//
+// online vem do campo nativo "status" de device/list (1=online, 2=alarme,
+// 3=offline — confirmado contra a API real, ver cmd/backfill-history
+// -debug-foxess-devicelist), não de um timeout de coleta. Exige 1 chamada
+// extra a device/list por ciclo, além do device/real/query já existente.
 func pollFoxess(ctx context.Context, client *foxess.Client, sn string) (foxessPollResult, error) {
+	devices, err := client.GetDeviceList(ctx)
+	if err != nil {
+		return foxessPollResult{}, fmt.Errorf("device/list: %w", err)
+	}
+	statusFound := false
+	online := false
+	for _, d := range devices {
+		devSN, _ := d["deviceSN"].(string)
+		if devSN != sn {
+			continue
+		}
+		online = floatFromMap(d, "status") == 1
+		statusFound = true
+		break
+	}
+	if !statusFound {
+		return foxessPollResult{}, fmt.Errorf("device/list: dispositivo %s não encontrado na lista", sn)
+	}
+
 	entries, err := client.GetRealQuery(ctx, sn, []string{"generationPower", "todayYield", "invTemperation"})
 	if err != nil {
 		return foxessPollResult{}, fmt.Errorf("device/real/query: %w", err)
@@ -65,10 +96,19 @@ func pollFoxess(ctx context.Context, client *foxess.Client, sn string) (foxessPo
 		values[name] = m["value"]
 	}
 
+	var lastOnlineAt *time.Time
+	if raw, _ := entries[0]["time"].(string); raw != "" {
+		if parsed, err := time.Parse(foxessTimeLayout, raw); err == nil {
+			lastOnlineAt = &parsed
+		}
+	}
+
 	return foxessPollResult{
 		powerKW:      floatFromMap(values, "generationPower"),
 		dayKWh:       floatFromMap(values, "todayYield"),
 		temperatureC: floatPtrFromMap(values, "invTemperation"),
+		online:       online,
+		lastOnlineAt: lastOnlineAt,
 	}, nil
 }
 
@@ -118,7 +158,7 @@ func RunFoxessWorker(ctx context.Context, deps Deps, cred CredentialRow, setting
 		failures = 0
 		dayKWh := guard.apply(now, result.powerKW, result.dayKWh)
 
-		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "foxess", result.powerKW, dayKWh, result.temperatureC); err != nil {
+		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "foxess", result.powerKW, dayKWh, result.temperatureC, result.online, result.lastOnlineAt); err != nil {
 			log.Error("falha ao gravar inverter_status", "error", err)
 			return
 		}

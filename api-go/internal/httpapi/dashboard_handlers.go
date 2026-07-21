@@ -165,12 +165,13 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 type inverterEntry struct {
-	PowerKW             *float64 `json:"power_kw"`
-	DayKWh              *float64 `json:"day_kwh"`
-	TemperatureC        *float64 `json:"temperature_c"`
-	Status              string   `json:"status"`
-	ConsecutiveFailures int      `json:"consecutive_failures"`
-	LastError           *string  `json:"last_error"`
+	PowerKW             *float64   `json:"power_kw"`
+	DayKWh              *float64   `json:"day_kwh"`
+	TemperatureC        *float64   `json:"temperature_c"`
+	Status              string     `json:"status"`
+	LastOnlineAt        *time.Time `json:"last_online_at"`
+	ConsecutiveFailures int        `json:"consecutive_failures"`
+	LastError           *string    `json:"last_error"`
 }
 
 func (s *Server) healthStatus(ctx context.Context, plantID, inverter string) (int, *string, error) {
@@ -210,22 +211,27 @@ func (s *Server) handleInverters(w http.ResponseWriter, r *http.Request) {
 		entry := inverterEntry{Status: "sem_comunicacao"}
 
 		var powerKW, dayKWh, temperatureC *float64
-		var recordedAt time.Time
+		var online *bool
+		var lastOnlineAt *time.Time
 		row := s.DB.QueryRow(ctx,
-			`SELECT power_kw, day_kwh, temperature_c, recorded_at FROM inverter_status
-			 WHERE plant_id = $1 AND inverter = $2 AND recorded_at >= now() - interval '1 hour'
+			`SELECT power_kw, day_kwh, temperature_c, online, last_online_at FROM inverter_status
+			 WHERE plant_id = $1 AND inverter = $2
 			 ORDER BY recorded_at DESC LIMIT 1`,
 			plantID, inverter,
 		)
-		err := row.Scan(&powerKW, &dayKWh, &temperatureC, &recordedAt)
+		err := row.Scan(&powerKW, &dayKWh, &temperatureC, &online, &lastOnlineAt)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			writeInternalError(w, err, "falha ao consultar status do inversor")
 			return
 		}
 		if err == nil {
-			ageMinutes := time.Since(recordedAt).Minutes()
+			// Status vem direto do sinal nativo do fabricante (online),
+			// gravado pelo worker a cada ciclo — sem inferir por timeout de
+			// coleta (ver pollFoxess/pollHuawei).
 			switch {
-			case ageMinutes > commTimeoutMinutes:
+			case online == nil:
+				entry.Status = "sem_comunicacao"
+			case !*online:
 				entry.Status = "sem_comunicacao"
 			case powerKW != nil && *powerKW > 0:
 				entry.Status = "gerando"
@@ -235,6 +241,7 @@ func (s *Server) handleInverters(w http.ResponseWriter, r *http.Request) {
 			entry.PowerKW = powerKW
 			entry.DayKWh = dayKWh
 			entry.TemperatureC = temperatureC
+			entry.LastOnlineAt = lastOnlineAt
 		}
 
 		failures, lastError, err := s.healthStatus(ctx, plantID, inverter)
