@@ -19,6 +19,8 @@ type runningWorker struct {
 // reiniciar o processo — diferente do collector/main.py (Python), que lia
 // a config 1x do .env na subida e nunca mais mudava em runtime.
 func Supervisor(ctx context.Context, deps Deps) {
+	startRecoveryBackfillLoop(ctx, deps)
+
 	running := map[string]*runningWorker{}
 	var lastSettings SystemSettings
 
