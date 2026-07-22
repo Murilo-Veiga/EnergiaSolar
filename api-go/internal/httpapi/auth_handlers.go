@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -25,6 +24,7 @@ type signupRequest struct {
 }
 
 type authResponse struct {
+	Token    string `json:"token"`
 	UserID   string `json:"user_id"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
@@ -56,27 +56,6 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, userID string) error {
-	token, err := auth.IssueToken(userID, s.JWTSecret)
-	if err != nil {
-		return err
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.CookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		// None (não Lax) porque o frontend costuma ser acessado num domínio
-		// diferente do da api (ex.: túnel ngrok na frente do :8090 enquanto a
-		// api segue em :8091) — Lax não é enviado em fetch/XHR cross-site,
-		// só em navegação de topo. SameSite=None exige Secure=true.
-		SameSite: http.SameSiteNoneMode,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
-	})
-	return nil
-}
-
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req signupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -104,22 +83,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.setSessionCookie(w, userID); err != nil {
+	token, err := auth.IssueToken(userID, s.JWTSecret)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "falha ao criar sessão")
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{UserID: userID, Email: email, Username: username, Name: name, IsAdmin: isAdmin})
+	writeJSON(w, http.StatusOK, authResponse{Token: token, UserID: userID, Email: email, Username: username, Name: name, IsAdmin: isAdmin})
 }
 
+// handleLogout não precisa invalidar nada no servidor — o JWT é stateless e
+// expira sozinho em 7 dias (ver auth.IssueToken). O client é quem descarta o
+// token guardado localmente. Mantido como endpoint por simetria com login e
+// caso um dia seja preciso revogar tokens (blocklist).
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.CookieName,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
-		Expires:  time.Unix(0, 0),
-	})
 	w.WriteHeader(http.StatusNoContent)
 }

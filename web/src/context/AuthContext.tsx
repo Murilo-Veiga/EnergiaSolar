@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, ApiError, type Me, type Plant } from "../lib/api";
+import { api, ApiError, clearToken, getToken, setToken, type LoginResponse, type Me, type Plant } from "../lib/api";
 
 interface AuthContextValue {
   authenticated: boolean;
@@ -14,9 +14,10 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Não existe endpoint "whoami" dedicado pra plants — descobrimos se a sessão
-// (cookie httpOnly) ainda é válida chamando /api/plants: 200 = autenticado,
-// 401 = não. is_admin vem de /api/me, chamado em paralelo.
+// Não existe endpoint "whoami" dedicado pra plants — descobrimos se o token
+// guardado (localStorage, ver lib/api.ts) ainda é válido chamando
+// /api/plants: 200 = autenticado, 401 = não (e aí descartamos o token). is_admin
+// vem de /api/me, chamado em paralelo.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        clearToken();
         setAuthenticated(false);
         setPlants([]);
         setIsAdmin(false);
@@ -50,22 +52,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!getToken()) {
+      setLoading(false);
+      return;
+    }
     refreshPlants().finally(() => setLoading(false));
   }, [refreshPlants]);
 
   const login = useCallback(
     async (identifier: string, password: string) => {
       // O backend aceita e-mail ou username no mesmo campo "email".
-      await api.post("/api/auth/login", { email: identifier, password });
+      const res = await api.post<LoginResponse>("/api/auth/login", { email: identifier, password });
+      setToken(res.token);
       await refreshPlants();
     },
     [refreshPlants],
   );
 
   const logout = useCallback(async () => {
-    await api.post("/api/auth/logout");
-    setAuthenticated(false);
-    setPlants([]);
+    try {
+      await api.post("/api/auth/logout");
+    } finally {
+      clearToken();
+      setAuthenticated(false);
+      setPlants([]);
+    }
   }, []);
 
   return (
