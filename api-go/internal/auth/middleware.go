@@ -3,25 +3,26 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strings"
 )
-
-const CookieName = "session"
 
 type contextKey string
 
 const userIDContextKey contextKey = "user_id"
 
-// Middleware valida o cookie de sessão (JWT) e injeta o user_id no
-// contexto da requisição. Protege todo /api/* exceto /api/auth/*.
+// Middleware valida o JWT enviado no header "Authorization: Bearer <token>"
+// e injeta o user_id no contexto da requisição. Protege todo /api/* exceto
+// /api/auth/*.
 func Middleware(secret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cookie, err := r.Cookie(CookieName)
-			if err != nil {
+			header := r.Header.Get("Authorization")
+			tokenString, ok := strings.CutPrefix(header, "Bearer ")
+			if !ok || tokenString == "" {
 				http.Error(w, `{"error":"não autenticado"}`, http.StatusUnauthorized)
 				return
 			}
-			claims, err := ParseToken(cookie.Value, secret)
+			claims, err := ParseToken(tokenString, secret)
 			if err != nil {
 				http.Error(w, `{"error":"sessão inválida ou expirada"}`, http.StatusUnauthorized)
 				return

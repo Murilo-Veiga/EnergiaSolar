@@ -1,5 +1,6 @@
-// Cliente HTTP único da API — sessão via cookie httpOnly (nunca lida
-// diretamente pelo React), sempre com credentials:"include".
+// Cliente HTTP único da API — sessão via JWT no header "Authorization:
+// Bearer <token>", guardado em localStorage (o token é lido pelo próprio
+// React pra montar o header; não existe mais cookie de sessão).
 //
 // URL sempre RELATIVA (mesma origem da página, nunca um host fixado em
 // build-time) — de propósito: um bundle com "http://localhost:8091"
@@ -9,6 +10,20 @@
 // api-go (ver nginx.conf); em dev o Vite faz o mesmo (ver vite.config.ts)
 // — em ambos os casos o browser só fala com a própria origem.
 const API_URL = "";
+
+const TOKEN_KEY = "solar_token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 export class ApiError extends Error {
   status: number;
@@ -20,13 +35,14 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData;
+  const token = getToken();
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    credentials: "include",
     headers: {
       // FormData define seu próprio Content-Type (multipart + boundary) —
       // forçar application/json aqui quebraria o upload de arquivo.
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -63,6 +79,10 @@ export interface Me {
   username: string;
   name: string;
   is_admin: boolean;
+}
+
+export interface LoginResponse extends Me {
+  token: string;
 }
 
 export interface AdminUser {

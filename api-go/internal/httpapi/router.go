@@ -15,14 +15,12 @@ func NewRouter(s *Server) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		// Libera qualquer origem. Como a sessão usa cookie com
-		// credentials:"include", um wildcard literal "*" não funciona (o
-		// browser recusa credentials com Access-Control-Allow-Origin: "*"),
-		// então refletimos a origem da própria requisição via AllowOriginFunc.
-		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type"},
-		AllowCredentials: true,
+		// Libera qualquer origem. A sessão agora vai no header Authorization
+		// (Bearer), não em cookie — sem credentials, então nenhum browser
+		// exige lista fechada de origem pra isso funcionar.
+		AllowOriginFunc: func(r *http.Request, origin string) bool { return true },
+		AllowedMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:  []string{"Content-Type", "Authorization"},
 	}))
 
 	r.Route("/api/auth", func(r chi.Router) {

@@ -1,12 +1,25 @@
 {
   "info": {
     "name": "EnergiaSolar API (Go)",
-    "description": "Todos os endpoints do backend api-go (auth cookie-based, multi-tenant: cada usuário só vê as próprias usinas). Gerada a partir de api-go/internal/httpapi/router.go.\n\nComo usar:\n1. Selecione o environment 'EnergiaSolar API (Go)'.\n2. Rode Auth > Criar conta (ou Login, se a conta já existir) — o cookie de sessão fica no cookie jar do Postman automaticamente, nenhuma rota abaixo precisa de header manual.\n3. Pra testar as pastas 'Admin — *', promova a conta a admin direto no Postgres: `UPDATE users SET is_admin = true WHERE email = '...'` (não existe rota de auto-promoção, de propósito).\n4. As pastas Usinas / Credenciais / Admin — Usuários têm scripts de teste que capturam ids (plant_id, cred_id, target_user_id) nas variáveis do environment — rode 'Criar usina' e 'Criar credencial' antes das rotas que dependem desses ids.",
+    "description": "Todos os endpoints do backend api-go (auth via JWT Bearer token, multi-tenant: cada usuário só vê as próprias usinas). Gerada a partir de api-go/internal/httpapi/router.go.\n\nComo usar:\n1. Selecione o environment 'EnergiaSolar API (Go)'.\n2. Rode Auth > Login — o script de teste do request captura o token da resposta e grava em {{token}}. A collection está configurada com Authorization Bearer {{token}} no nível raiz, então toda rota abaixo herda o header automaticamente, sem precisar copiar nada manualmente.\n3. Pra testar as pastas 'Admin — *', promova a conta a admin direto no Postgres: `UPDATE users SET is_admin = true WHERE email = '...'` (não existe rota de auto-promoção, de propósito).\n4. As pastas Usinas / Credenciais / Admin — Usuários têm scripts de teste que capturam ids (plant_id, cred_id, target_user_id) nas variáveis do environment — rode 'Criar usina' e 'Criar credencial' antes das rotas que dependem desses ids.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
   },
   "item": [
     {
       "name": "Auth",
+      "auth": {
+        "type": "noauth"
+      },
       "item": [
         {
           "name": "Criar conta (signup)",
@@ -29,7 +42,7 @@
                 "signup"
               ]
             },
-            "description": "Cria a conta e já loga (Set-Cookie: session). O cookie httpOnly fica no cookie jar do Postman automaticamente — não precisa copiar nada manualmente.",
+            "description": "ATENÇÃO: rota não existe no router atual (api-go/internal/httpapi/router.go só registra /api/auth/login e /api/auth/logout) — mantido aqui só de referência histórica, vai responder 404. Crie a primeira conta direto no Postgres ou peça pra um admin usar Admin — Usuários > Criar usuário.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
@@ -57,12 +70,26 @@
                 "login"
               ]
             },
-            "description": "Mesma resposta do signup. Necessário antes de qualquer rota abaixo, exceto /api/auth/*.",
+            "description": "Aceita e-mail ou username no campo \"email\". Resposta traz o JWT em \"token\" — o script de teste abaixo grava em {{token}} automaticamente. Necessário antes de qualquer rota abaixo, exceto /api/auth/*.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.environment.set('token', pm.response.json().token);",
+                  "    console.log('token capturado');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Logout",
@@ -80,11 +107,22 @@
                 "logout"
               ]
             },
-            "description": "Limpa o cookie de sessão (Set-Cookie com Expires no passado)."
-          }
+            "description": "O JWT é stateless — não há nada pra invalidar no servidor, o endpoint só existe por simetria. O script de teste abaixo limpa {{token}} localmente pra simular o descarte que o frontend faz."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.environment.set('token', '');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ],
-      "description": "Cadastro/login/logout — únicas rotas públicas da API, tudo o resto exige o cookie de sessão emitido aqui."
+      "description": "Login/logout — únicas rotas públicas da API, tudo o resto exige o header \"Authorization: Bearer {{token}}\" emitido no login (aplicado automaticamente pela auth Bearer no nível da collection)."
     },
     {
       "name": "Minha conta",
