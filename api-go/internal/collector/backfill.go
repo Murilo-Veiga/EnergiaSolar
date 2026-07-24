@@ -479,8 +479,8 @@ func writeBackfillResults(ctx context.Context, db *pgxpool.Pool, results []Backf
 			return fmt.Errorf("limpando dia anterior (%s/%s/%s): %w", r.PlantID, r.Brand, r.Day, err)
 		}
 		if _, err := db.Exec(ctx,
-			`INSERT INTO inverter_status (plant_id, inverter, recorded_at, power_kw, day_kwh, temperature_c)
-			 VALUES ($1, $2, $3, NULL, $4, NULL)`,
+			`		INSERT INTO inverter_status (plant_id, inverter, recorded_at, power_kw, day_kwh, temperature_c, fault)
+			 VALUES ($1, $2, $3, NULL, $4, NULL, false)`,
 			r.PlantID, r.Brand, recordedAt, r.DayKWh,
 		); err != nil {
 			return fmt.Errorf("gravando inverter_status (%s/%s/%s): %w", r.PlantID, r.Brand, r.Day, err)

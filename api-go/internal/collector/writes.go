@@ -8,15 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// writeInverterStatus grava 1 ponto de coleta. online e lastOnlineAt vêm do
-// status nativo do fabricante (FoxESS device/list.status, Huawei
+// writeInverterStatus grava 1 ponto de coleta. online, fault e lastOnlineAt
+// vêm do status nativo do fabricante (FoxESS device/list.status, Huawei
 // dataItemMap.run_state) — não são inferidos por timeout de coleta, ver
 // pollFoxess/pollHuawei.
-func writeInverterStatus(ctx context.Context, db *pgxpool.Pool, plantID, inverter string, powerKW, dayKWh float64, temperatureC *float64, online bool, lastOnlineAt *time.Time) error {
+func writeInverterStatus(ctx context.Context, db *pgxpool.Pool, plantID, inverter string, powerKW, dayKWh float64, temperatureC *float64, online bool, fault bool, lastOnlineAt *time.Time) error {
 	_, err := db.Exec(ctx,
-		`INSERT INTO inverter_status (plant_id, inverter, recorded_at, power_kw, day_kwh, temperature_c, online, last_online_at)
-		 VALUES ($1, $2, now(), $3, $4, $5, $6, $7)`,
-		plantID, inverter, powerKW, dayKWh, temperatureC, online, lastOnlineAt,
+		`INSERT INTO inverter_status (plant_id, inverter, recorded_at, power_kw, day_kwh, temperature_c, online, fault, last_online_at)
+		 VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8)`,
+		plantID, inverter, powerKW, dayKWh, temperatureC, online, fault, lastOnlineAt,
 	)
 	return err
 }
