@@ -178,7 +178,7 @@ func RunHuaweiWorker(ctx context.Context, deps Deps, cred CredentialRow, setting
 		failures = 0
 		dayKWh := guard.apply(now, result.powerKW, result.dayKWh)
 
-		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "huawei", result.powerKW, dayKWh, result.temperatureC, result.online, result.lastOnlineAt); err != nil {
+		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "huawei", result.powerKW, dayKWh, result.temperatureC, result.online, false, result.lastOnlineAt); err != nil {
 			log.Error("falha ao gravar inverter_status", "error", err)
 			return
 		}

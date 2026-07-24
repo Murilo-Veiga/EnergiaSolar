@@ -211,21 +211,21 @@ func (s *Server) handleInverters(w http.ResponseWriter, r *http.Request) {
 		entry := inverterEntry{Status: "sem_comunicacao"}
 
 		var powerKW, dayKWh, temperatureC *float64
-		var online *bool
+		var online, fault *bool
 		var lastOnlineAt *time.Time
 		row := s.DB.QueryRow(ctx,
-			`SELECT power_kw, day_kwh, temperature_c, online, last_online_at FROM inverter_status
+			`SELECT power_kw, day_kwh, temperature_c, online, fault, last_online_at FROM inverter_status
 			 WHERE plant_id = $1 AND inverter = $2
 			 ORDER BY recorded_at DESC LIMIT 1`,
 			plantID, inverter,
 		)
-		err := row.Scan(&powerKW, &dayKWh, &temperatureC, &online, &lastOnlineAt)
+		err := row.Scan(&powerKW, &dayKWh, &temperatureC, &online, &fault, &lastOnlineAt)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			writeInternalError(w, err, "falha ao consultar status do inversor")
 			return
 		}
 		if err == nil {
-			// Status vem direto do sinal nativo do fabricante (online),
+			// Status vem direto do sinal nativo do fabricante (online/fault),
 			// gravado pelo worker a cada ciclo — sem inferir por timeout de
 			// coleta (ver pollFoxess/pollHuawei).
 			switch {
@@ -233,6 +233,8 @@ func (s *Server) handleInverters(w http.ResponseWriter, r *http.Request) {
 				entry.Status = "sem_comunicacao"
 			case !*online:
 				entry.Status = "sem_comunicacao"
+			case fault != nil && *fault:
+				entry.Status = "falha"
 			case powerKW != nil && *powerKW > 0:
 				entry.Status = "gerando"
 			default:

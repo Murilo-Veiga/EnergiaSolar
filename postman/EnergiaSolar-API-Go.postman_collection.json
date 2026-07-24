@@ -22,34 +22,6 @@
       },
       "item": [
         {
-          "name": "Criar conta (signup)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{api_base_url}}/api/auth/signup",
-              "host": [
-                "{{api_base_url}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "signup"
-              ]
-            },
-            "description": "ATENÇÃO: rota não existe no router atual (api-go/internal/httpapi/router.go só registra /api/auth/login e /api/auth/logout) — mantido aqui só de referência histórica, vai responder 404. Crie a primeira conta direto no Postgres ou peça pra um admin usar Admin — Usuários > Criar usuário.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
-            }
-          }
-        },
-        {
           "name": "Login",
           "request": {
             "method": "POST",

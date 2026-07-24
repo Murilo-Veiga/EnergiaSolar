@@ -34,6 +34,7 @@ type foxessPollResult struct {
 	dayKWh       float64
 	temperatureC *float64
 	online       bool
+	breakdown    bool
 	lastOnlineAt *time.Time
 }
 
@@ -50,10 +51,10 @@ const foxessTimeLayout = "2006-01-02 15:04:05 MST-0700"
 // igual ao que a Huawei já tem. Fica como pendência se a curva mais fina
 // da FoxESS fizer falta (ver README > "Limitações conhecidas").
 //
-// online vem do campo nativo "status" de device/list (1=online, 2=alarme,
-// 3=offline — confirmado contra a API real, ver cmd/backfill-history
-// -debug-foxess-devicelist), não de um timeout de coleta. Exige 1 chamada
-// extra a device/list por ciclo, além do device/real/query já existente.
+// online vem do campo nativo "status" de device/list (1=online, 2=breakdown,
+// 3=online_sem_geracao, 4=offline), não de um timeout de coleta. Exige 1
+// chamada extra a device/list por ciclo, além do device/real/query já
+// existente.
 func pollFoxess(ctx context.Context, client *foxess.Client, sn string) (foxessPollResult, error) {
 	devices, err := client.GetDeviceList(ctx)
 	if err != nil {
@@ -61,12 +62,15 @@ func pollFoxess(ctx context.Context, client *foxess.Client, sn string) (foxessPo
 	}
 	statusFound := false
 	online := false
+	breakdown := false
 	for _, d := range devices {
 		devSN, _ := d["deviceSN"].(string)
 		if devSN != sn {
 			continue
 		}
-		online = floatFromMap(d, "status") == 1
+		status := int(floatFromMap(d, "status"))
+		online = status == 1 || status == 2 || status == 3
+		breakdown = status == 2
 		statusFound = true
 		break
 	}
@@ -108,6 +112,7 @@ func pollFoxess(ctx context.Context, client *foxess.Client, sn string) (foxessPo
 		dayKWh:       floatFromMap(values, "todayYield"),
 		temperatureC: floatPtrFromMap(values, "invTemperation"),
 		online:       online,
+		breakdown:    breakdown,
 		lastOnlineAt: lastOnlineAt,
 	}, nil
 }
@@ -159,7 +164,7 @@ func RunFoxessWorker(ctx context.Context, deps Deps, cred CredentialRow, setting
 		failures = 0
 		dayKWh := guard.apply(now, result.powerKW, result.dayKWh)
 
-		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "foxess", result.powerKW, dayKWh, result.temperatureC, result.online, result.lastOnlineAt); err != nil {
+		if err := writeInverterStatus(ctx, deps.DB, cred.PlantID, "foxess", result.powerKW, dayKWh, result.temperatureC, result.online, result.breakdown, result.lastOnlineAt); err != nil {
 			log.Error("falha ao gravar inverter_status", "error", err)
 			return
 		}
