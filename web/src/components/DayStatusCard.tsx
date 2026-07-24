@@ -3,39 +3,77 @@ import { api, type ForecastDay } from "../lib/api";
 import { fmtNum } from "../lib/fmt";
 import { IconBadge } from "./icons";
 
-const RATING_ICON_NAME: Record<string, string> = { bom: "sun", moderado: "cloud", ruim: "drizzle" };
-const RATING_BADGE_COLOR: Record<string, "gold" | "blue"> = { bom: "gold", moderado: "blue", ruim: "blue" };
-// Escala fixa até 20 MJ/m² (dia de céu limpo típico na região) — dá contexto
-// comparável entre os dias em vez de reescalar pelo máximo da semana.
-const radiationMeterPct = (mj: number) => Math.max(4, Math.min(100, Math.round((mj / 20) * 100)));
+const RATING_ICON: Record<string, string> = { bom: "sun", moderado: "cloud", ruim: "drizzle" };
+const RATING_COLOR: Record<string, "gold" | "blue" | "red"> = { bom: "gold", moderado: "blue", ruim: "red" };
 
-function renderCloudSparklinePath(cloudcover: number[], sunriseHHMM: string, sunsetHHMM: string) {
+const radPct = (mj: number) => Math.max(4, Math.min(100, Math.round((mj / 20) * 100)));
+
+function CloudSparkline({ cloudcover, sunrise, sunset }: { cloudcover: number[]; sunrise: string; sunset: string }) {
   const w = 900;
-  const h = 38;
+  const h = 36;
   const n = cloudcover.length;
   const stepX = w / n;
-  const sunriseH = parseInt(sunriseHHMM.slice(0, 2), 10) + parseInt(sunriseHHMM.slice(3, 5), 10) / 60;
-  const sunsetH = parseInt(sunsetHHMM.slice(0, 2), 10) + parseInt(sunsetHHMM.slice(3, 5), 10) / 60;
-  const dayX0 = (sunriseH / 24) * w;
-  const dayX1 = (sunsetH / 24) * w;
   const gap = 2;
   const bw = stepX - gap;
+  const sr = parseInt(sunrise.slice(0, 2), 10) + parseInt(sunrise.slice(3, 5), 10) / 60;
+  const ss = parseInt(sunset.slice(0, 2), 10) + parseInt(sunset.slice(3, 5), 10) / 60;
+  const dayX0 = (sr / 24) * w;
+  const dayX1 = (ss / 24) * w;
 
   const bars = cloudcover.map((v, i) => {
-    const bh = (v / 100) * (h - 4);
+    const bh = Math.max(1, (v / 100) * (h - 8));
     const x = i * stepX;
-    const inDaylight = i + 0.5 >= sunriseH && i + 0.5 <= sunsetH;
-    const color = inDaylight ? "var(--warning)" : "var(--ink-muted)";
-    const op = inDaylight ? 1 : 0.5;
-    return `<rect x="${x.toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="${color}" opacity="${op}"/>`;
+    const inDay = i + 0.5 >= sr && i + 0.5 <= ss;
+    return `<rect x="${x.toFixed(1)}" y="${(h - bh - 4).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="${inDay ? "var(--warning)" : "var(--ink-muted)"}" opacity="${inDay ? "1" : "0.35"}"/>`;
   });
 
-  return (
+  const html =
     `<svg viewBox="0 0 ${w} ${h}" style="width:100%;display:block" preserveAspectRatio="none">` +
-    `<rect x="${dayX0.toFixed(1)}" y="0" width="${(dayX1 - dayX0).toFixed(1)}" height="${h}" fill="var(--warning)" opacity="0.08"/>` +
-    `<line x1="0" y1="${h - 0.5}" x2="${w}" y2="${h - 0.5}" stroke="var(--line)" stroke-width="1"/>` +
+    `<rect x="${dayX0.toFixed(1)}" y="0" width="${(dayX1 - dayX0).toFixed(1)}" height="${h}" fill="var(--warning)" opacity="0.06"/>` +
     bars.join("") +
-    `</svg>`
+    `</svg>`;
+
+  return <div className="cs-line" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function WeatherIcon({ rating }: { rating: string }) {
+  const name = RATING_ICON[rating] ?? "cloud";
+  const color = RATING_COLOR[rating] ?? "blue";
+  return <IconBadge name={name} color={color} size="card" />;
+}
+
+function DayCard({ day, isToday }: { day: ForecastDay; isToday: boolean }) {
+  const rating = isToday ? day.rating_daylight ?? day.rating : day.rating;
+  const condition = isToday ? day.weather_daylight ?? day.weather : day.weather;
+  const date = new Date(`${day.date}T12:00:00`);
+  const weekday = date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+  const label = isToday ? "Hoje" : weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  const dayNum = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+
+  return (
+    <div className={`w-day${isToday ? " w-day--today" : ""}`}>
+      <div className="w-day__head">
+        <span className="w-day__label">{label}</span>
+        <span className="w-day__date">{dayNum}</span>
+      </div>
+
+      <div className="w-day__body">
+        <span className="w-day__icon">
+          <WeatherIcon rating={rating} />
+        </span>
+        <span className="w-day__temps">
+          <span className="w-day__temp-max">{fmtNum(day.temp_max, 0)}°</span>
+          <span className="w-day__temp-min">{fmtNum(day.temp_min, 0)}°</span>
+        </span>
+      </div>
+
+      <span className="w-day__cond" title={condition}>{condition}</span>
+
+      <div className="w-day__sun">
+        <span className="w-day__sun-item"><i className="w-day__sun-ico w-day__sun-ico--up" />{day.sunrise}</span>
+        <span className="w-day__sun-item"><i className="w-day__sun-ico w-day__sun-ico--down" />{day.sunset}</span>
+      </div>
+    </div>
   );
 }
 
@@ -51,76 +89,67 @@ export function DayStatusCard({ plantId }: { plantId: string }) {
     }
     void load();
     const id = setInterval(load, 30 * 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    return () => { cancelled = true; clearInterval(id); };
   }, [plantId]);
 
   const today = forecast?.[0];
 
   return (
-    <div className="card day-card">
-      <div className="head">
-        <h3>Previsão do tempo</h3>
-        <span className="date">{today?.date ?? "--"}</span>
+    <div className="card w-card">
+      <div className="w-head">
+        <div className="w-head__left">
+          <h3 className="w-head__title">Clima</h3>
+          <span className="w-head__sub">Previsão 5 dias</span>
+        </div>
+        {today && (
+          <div className="w-head__right">
+            <span className="w-head__rad">
+              <span className="w-head__rad-val">{fmtNum(today.solar_radiation_mj_m2)}</span>
+              <span className="w-head__rad-unit">MJ/m²</span>
+            </span>
+          </div>
+        )}
       </div>
 
-      {forecast && (
-        <div className="day-timeline">
-          {forecast.map((d, i) => {
-            const isToday = i === 0;
-            const rating = isToday ? d.rating_daylight ?? d.rating : d.rating;
-            const color = RATING_BADGE_COLOR[rating] ?? "blue";
-            const iconName = RATING_ICON_NAME[rating] ?? "cloud";
-            const weekday = new Date(`${d.date}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
-            const label = isToday ? "Hoje" : weekday.charAt(0).toUpperCase() + weekday.slice(1);
-            const condition = isToday ? d.weather_daylight ?? d.weather : d.weather;
-            return (
-              <div className={`tl-day${isToday ? " today" : ""}`} key={d.date}>
-                <div className="d">{label}</div>
-                <IconBadge name={iconName} color={color} size="fc" />
-                <div className="cond">{condition}</div>
-                {isToday && d.sunrise && d.sunset && (
-                  <div className="sun-note">
-                    {d.sunrise}–{d.sunset}
-                  </div>
-                )}
-                <div className="fc-stats">
-                  <div className="rad">
-                    {fmtNum(d.solar_radiation_mj_m2)} <span className="unit">MJ/m²</span>
-                    <div className="rad-meter">
-                      <i
-                        style={{
-                          width: `${radiationMeterPct(d.solar_radiation_mj_m2)}%`,
-                          ["--rad-color" as string]: color === "gold" ? "var(--warning)" : "var(--accent-blue)",
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="t">
-                    {fmtNum(d.temp_max, 0)}°/{fmtNum(d.temp_min, 0)}°
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+      <div className="w-timeline">
+        {forecast?.map((d, i) => <DayCard key={d.date} day={d} isToday={i === 0} />)}
+      </div>
+
+      {today?.cloudcover_hourly && today.sunrise && today.sunset && (
+        <div className="w-clouds">
+          <div className="w-clouds__head">
+            <span className="w-clouds__label">Nebulosidade</span>
+            <span className="w-clouds__sub">hora a hora</span>
+          </div>
+          <CloudSparkline cloudcover={today.cloudcover_hourly} sunrise={today.sunrise} sunset={today.sunset} />
+          <div className="w-clouds__ticks">
+            <span>00h</span>
+            <span>06h</span>
+            <span>12h</span>
+            <span>18h</span>
+            <span>23h</span>
+          </div>
         </div>
       )}
 
-      <div className="sparkline-box" hidden={!(today?.cloudcover_hourly && today.sunrise && today.sunset)}>
-        <div className="sparkline-label">Nuvens ao longo do dia</div>
-        {today?.cloudcover_hourly && today.sunrise && today.sunset && (
-          <div dangerouslySetInnerHTML={{ __html: renderCloudSparklinePath(today.cloudcover_hourly, today.sunrise, today.sunset) }} />
-        )}
-        <div className="sparkline-caption">
-          <span>00h</span>
-          <span>06h</span>
-          <span>12h</span>
-          <span>18h</span>
-          <span>23h</span>
+      {today && (today.precipitation_mm > 0 || today.precipitation_probability_pct > 0) && (
+        <div className="w-precip">
+          <div className="w-precip__item">
+            <span className="w-precip__label">Chuva</span>
+            <span className="w-precip__value">{fmtNum(today.precipitation_mm, 1)} mm</span>
+          </div>
+          <div className="w-precip__divider" />
+          <div className="w-precip__item">
+            <span className="w-precip__label">Probabilidade</span>
+            <span className="w-precip__value">{fmtNum(today.precipitation_probability_pct, 0)}%</span>
+          </div>
+          <div className="w-precip__divider" />
+          <div className="w-precip__item">
+            <span className="w-precip__label">Radiação solar</span>
+            <span className="w-precip__value">{fmtNum(today.solar_radiation_mj_m2)} <span className="w-precip__unit">MJ/m²</span></span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

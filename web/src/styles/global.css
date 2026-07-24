@@ -304,29 +304,108 @@
   .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; }
   .status-pill .sw { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 
-  /* Status do dia — cartão único (fatos da usina + linha do tempo do clima) */
-  .day-card { padding: 16px 18px; }
-  .day-card .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
-  .day-card h3 { font-size: 13px; font-weight: 650; margin: 0; color: var(--ink-2); letter-spacing: -.005em; }
-  .day-card .date { font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
   .day-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 12px; }
   .day-grid .l { font-size: 10.5px; color: var(--ink-muted); margin-bottom: 3px; }
   .day-grid .v { font-size: 14px; font-weight: 600; font-family: var(--font-data); }
   .day-grid .aux { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 3px; font-family: var(--font-data); }
   @media (max-width: 860px) {
-    /* Mesmo problema do .hero-row/.inv-row: colunas de largura fixa
-       espremem em tela de celular (usado em Recordes do Histórico e
-       Confiabilidade da coleta em Saúde da instalação). */
     .day-grid { grid-template-columns: 1fr; }
   }
   .hero-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .hero-line .aux { font-size: 12.5px; color: var(--ink-muted); }
-  .sparkline-box {
-    margin-top: 12px; padding: 10px 12px 8px; border-radius: 9px; background: var(--surface-2);
+
+  /* ---- Previsão do tempo (weather card) ---- */
+  .w-card { padding: 20px 22px; }
+  .w-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .w-head__left { display: flex; flex-direction: column; gap: 2px; }
+  .w-head__title { font-size: 14px; font-weight: 650; margin: 0; color: var(--ink); letter-spacing: -.01em; }
+  .w-head__sub { font-size: 11px; color: var(--ink-muted); }
+  .w-head__right { display: flex; align-items: center; gap: 6px; }
+  .w-head__rad { display: flex; align-items: baseline; gap: 3px; }
+  .w-head__rad-val { font-size: 18px; font-weight: 650; font-family: var(--font-data); color: var(--warning); font-variant-numeric: tabular-nums; }
+  .w-head__rad-unit { font-size: 10px; color: var(--ink-muted); }
+
+  .w-timeline { display: flex; gap: 8px; }
+  @media (max-width: 860px) {
+    .w-timeline {
+      overflow-x: auto; padding-bottom: 8px;
+      scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+    }
   }
-  .sparkline-box[hidden] { display: none; }
-  .sparkline-label { font-size: 9.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; margin-bottom: 7px; }
-  .sparkline-caption { display: flex; justify-content: space-between; font-size: 9px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 4px; }
+
+  .w-day {
+    flex: 1 1 0;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 11px 9px; display: flex; flex-direction: column;
+    gap: 8px; position: relative; cursor: default; overflow: hidden; min-width: 0;
+    transition: background-color .18s ease, border-color .18s ease;
+  }
+  @media (min-width: 861px) {
+    .w-day:hover { background: var(--surface-3); border-color: var(--ink-muted); }
+  }
+  @media (max-width: 860px) {
+    .w-day { flex: 0 0 132px; scroll-snap-align: start; }
+  }
+  .w-day--today { background: var(--surface-3); border-color: rgba(57,135,229,.35); }
+  /* faixa vertical de destaque no dia atual — substitui o antigo selo "HOJE"
+     flutuante, que duplicava o rótulo da coluna */
+  .w-day--today::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--accent-blue);
+  }
+
+  .w-day__head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .w-day__label {
+    font-size: 10.5px; color: var(--ink-2); font-weight: 650; text-transform: uppercase;
+    letter-spacing: .05em; white-space: nowrap;
+  }
+  .w-day--today .w-day__label { color: var(--accent-blue); }
+  .w-day__date {
+    font-size: 9.5px; color: var(--ink-muted); font-family: var(--font-data);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  .w-day__body { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .w-day__icon { display: inline-flex; flex-shrink: 0; }
+  .w-day__temps { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+  .w-day__temp-max { font-size: 19px; font-weight: 700; color: var(--ink); font-family: var(--font-data); font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.02em; }
+  .w-day__temp-min { font-size: 12px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; line-height: 1; }
+
+  .w-day__cond {
+    font-size: 11px; color: var(--ink-2); line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .w-day__sun {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    margin-top: auto; padding-top: 7px; border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--ink-muted); font-family: var(--font-data);
+    font-variant-numeric: tabular-nums;
+  }
+  .w-day__sun-item { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+  .w-day__sun-ico {
+    width: 0; height: 0; flex-shrink: 0;
+    border-left: 3px solid transparent; border-right: 3px solid transparent;
+  }
+  .w-day__sun-ico--up { border-bottom: 4px solid var(--warning); }
+  .w-day__sun-ico--down { border-top: 4px solid var(--ink-muted); }
+
+  .w-clouds { margin-top: 16px; padding: 12px 14px 10px; border-radius: 10px; background: var(--surface-2); }
+  .w-clouds__head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+  .w-clouds__label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; }
+  .w-clouds__sub { font-size: 9px; color: var(--ink-muted); }
+  .cs-line svg { display: block; width: 100%; }
+  .w-clouds__ticks { display: flex; justify-content: space-between; font-size: 8.5px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 4px; }
+
+  .w-precip {
+    display: flex; align-items: center; gap: 0; margin-top: 14px;
+    padding: 10px 14px; border-radius: 10px; background: var(--surface-2);
+  }
+  .w-precip__item { flex: 1; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+  .w-precip__label { font-size: 9px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .w-precip__value { font-size: 14px; font-weight: 650; font-family: var(--font-data); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .w-precip__unit { font-size: 9px; color: var(--ink-muted); font-weight: 500; }
+  .w-precip__divider { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
 
   /* ---- selo "novo" — regra do projeto: toda aba/menu/seção nova fica com
      esse selo por NEW_FEATURE_DAYS (ver JS), depois some sozinho ---- */
@@ -335,43 +414,6 @@
     letter-spacing: .04em; text-transform: uppercase; color: var(--good); background: rgba(12,163,12,0.14);
     padding: 1.5px 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
   }
-
-  /* Linha do tempo (hoje + próximos 4 dias) dentro do card "Status do dia" —
-     "hoje" usa o clima recalculado só nas horas de sol (ver README), os
-     outros usam o resumo bruto do dia inteiro; o destaque visual deixa essa
-     diferença de fonte visível em vez de escondida. */
-  .day-timeline { display: flex; gap: 8px; }
-  .tl-day {
-    flex: 1; text-align: center; background: var(--surface-2); border-radius: 10px; padding: 9px 6px 8px;
-    display: flex; flex-direction: column; border: 1px solid transparent; position: relative;
-    transition: background-color .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;
-  }
-  .tl-day:hover { background: var(--surface-3); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.18); }
-
-  @media (max-width: 860px) {
-    /* 5 cartões com flex:1 espremem demais numa tela de celular — vira
-       carrossel horizontal (scroll + snap) em vez de cortar o último
-       cartão fora da tela. */
-    .day-timeline { overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
-    .tl-day { flex: 0 0 96px; scroll-snap-align: start; }
-  }
-  .tl-day.today { background: var(--surface-3); border-color: var(--accent-blue); box-shadow: 0 0 0 1px rgba(57,135,229,.12), 0 4px 16px rgba(57,135,229,.1); }
-  .tl-day.today:hover { transform: none; }
-  .tl-day.today::before {
-    content: "HOJE"; position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
-    background: var(--accent-blue); color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .04em;
-    padding: 1.5px 6px; border-radius: 5px; box-shadow: 0 2px 6px rgba(57,135,229,.35);
-  }
-  .tl-day .d { font-size: 10px; color: var(--ink-muted); font-weight: 550; text-transform: uppercase; letter-spacing: .03em; }
-  .tl-day .icon-badge { margin: 5px auto 4px; transform: scale(.92); }
-  .tl-day .cond { font-size: 9.5px; color: var(--ink-2); line-height: 1.2; min-height: 22px; padding: 0 2px; }
-  .tl-day .sun-note { font-size: 8.5px; color: var(--ink-muted); font-family: var(--font-data); margin-top: 1px; }
-  .tl-day .fc-stats { border-top: 1px solid var(--border); margin-top: 7px; padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
-  .tl-day .rad { font-size: 9.5px; color: var(--ink-muted); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
-  .tl-day .rad .unit { font-size: 7.5px; color: var(--ink-muted); }
-  .tl-day .rad-meter { height: 3px; background: var(--surface); border-radius: 2px; overflow: hidden; margin: 3px 1px 0; }
-  .tl-day .rad-meter i { display: block; height: 100%; border-radius: 2px; background: var(--rad-color, var(--ink-muted)); }
-  .tl-day .t { font-size: 12px; color: var(--ink-2); font-weight: 700; font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 
   /* Histórico table */
   .hist-table { width: 100%; border-collapse: collapse; }

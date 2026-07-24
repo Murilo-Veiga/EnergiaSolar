@@ -81,7 +81,7 @@ type forecastDay struct {
 // forecastCacheTTL espelha _FORECAST_CACHE_TTL em webapp/main.py — a
 // Open-Meteo só atualiza o modelo a cada poucas horas, então cache de 2h
 // evita bater na API a cada 30s/30min que o frontend consulta.
-const forecastCacheTTL = 2 * time.Hour
+const forecastCacheTTL = 1 * time.Hour
 
 type forecastCacheEntry struct {
 	data      []forecastDay
